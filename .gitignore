@@ -26,7 +26,8 @@ redis_data/
 Thumbs.db
 
 # IDEs/Editors
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.suo
 *.ntvs*

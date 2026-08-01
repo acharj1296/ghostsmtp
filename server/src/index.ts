@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { env } from './config/env';
 import { connectDatabase, getDbStatus } from './db/mongoose';
 import domainRouter from './routes/domain.routes';
+import credentialRouter from './routes/credential.routes';
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // API Routers
 app.use('/api/v1/domains', domainRouter);
+app.use('/api/v1/credentials', credentialRouter);
 
 // Health Check Endpoint (Includes MongoDB status check)
 app.get('/api/v1/health', (req, res) => {

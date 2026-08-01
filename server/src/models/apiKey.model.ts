@@ -2,11 +2,12 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface IApiKey extends Document {
   workspaceId: Types.ObjectId;
-  keyHash: string; // sha256 hashed value
-  name: string; // nickname, e.g. 'Production Send Key'
-  scopes: string[]; // e.g. ['email:send', 'domains:read']
+  apiKeyId: string; // Public ID prefix of key
+  keyHash: string; // Hashed value
+  name: string;
+  scopes: ('send' | 'read' | 'admin')[];
+  status: 'active' | 'disabled' | 'revoked';
   lastUsedAt?: Date;
-  active: boolean;
   isDeleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -16,11 +17,12 @@ export interface IApiKey extends Document {
 const ApiKeySchema = new Schema<IApiKey>(
   {
     workspaceId: { type: Schema.Types.ObjectId, ref: 'Workspace', required: true, index: true },
+    apiKeyId: { type: String, required: true, unique: true, index: true },
     keyHash: { type: String, required: true, unique: true, index: true },
     name: { type: String, required: true, trim: true },
-    scopes: [{ type: String, required: true }],
+    scopes: [{ type: String, required: true, enum: ['send', 'read', 'admin'] }],
+    status: { type: String, required: true, default: 'active', enum: ['active', 'disabled', 'revoked'], index: true },
     lastUsedAt: { type: Date },
-    active: { type: Boolean, required: true, default: true },
     isDeleted: { type: Boolean, required: true, default: false, index: true },
     deletedAt: { type: Date },
   },

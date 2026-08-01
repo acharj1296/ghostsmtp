@@ -2,10 +2,11 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface ISmtpCredential extends Document {
   workspaceId: Types.ObjectId;
-  username: string; // smtp credentials login username
-  passwordHash: string; // bcrypt/argon2 hashed
+  username: string;
+  passwordHash: string;
   description?: string;
-  active: boolean;
+  status: 'active' | 'disabled';
+  lastUsedAt?: Date;
   isDeleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -18,7 +19,8 @@ const SmtpCredentialSchema = new Schema<ISmtpCredential>(
     username: { type: String, required: true, unique: true, index: true },
     passwordHash: { type: String, required: true },
     description: { type: String, trim: true },
-    active: { type: Boolean, required: true, default: true },
+    status: { type: String, required: true, default: 'active', enum: ['active', 'disabled'], index: true },
+    lastUsedAt: { type: Date },
     isDeleted: { type: Boolean, required: true, default: false, index: true },
     deletedAt: { type: Date },
   },

@@ -7,15 +7,18 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test:smtp": "ts-node-dev --transpile-only src/tests/smtpAuth.test.ts"
+    "test:smtp": "ts-node-dev --transpile-only src/tests/smtpAuth.test.ts",
+    "test:queue": "ts-node-dev --transpile-only src/tests/queue.test.ts"
   },
   "dependencies": {
     "argon2": "^0.45.1",
+    "bullmq": "^6.0.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase-admin": "^12.0.0",
     "helmet": "^7.1.0",
+    "ioredis": "^6.0.0",
     "mongoose": "^8.2.3",
     "zod": "^3.22.4"
   },

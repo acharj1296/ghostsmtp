@@ -12,7 +12,11 @@ try {
       projectId: env.FIREBASE_PROJECT_ID,
       clientEmail: env.FIREBASE_CLIENT_EMAIL,
       privateKey: privateKey,
-    }),
+      privateKeyId: env.FIREBASE_PRIVATE_KEY_ID,
+      clientId: env.FIREBASE_CLIENT_ID,
+      clientCertUrl: env.FIREBASE_CLIENT_X509_CERT_URL,
+    } as any),
+    databaseURL: env.FIREBASE_DATABASE_URL,
   });
   console.log('[Firebase Admin] Initialized successfully.');
 } catch (error: any) {

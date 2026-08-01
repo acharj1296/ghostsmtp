@@ -14,6 +14,9 @@ const envSchema = z.object({
   FIREBASE_PRIVATE_KEY_ID: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().default('-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----\n'),
   FIREBASE_CLIENT_EMAIL: z.string().default('placeholder@ghostsmtp-prod.iam.gserviceaccount.com'),
+  FIREBASE_CLIENT_ID: z.string().optional(),
+  FIREBASE_CLIENT_X509_CERT_URL: z.string().optional(),
+  FIREBASE_DATABASE_URL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

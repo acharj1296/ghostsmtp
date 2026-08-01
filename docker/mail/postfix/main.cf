@@ -17,17 +17,16 @@ recipient_delimiter = +
 # Local network settings
 mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
 
-# Virtual Mailbox Settings (PostgreSQL Backend Prep)
-virtual_mailbox_domains = pgsql:/etc/postfix/sql/virtual-domains.cf
-virtual_mailbox_maps = pgsql:/etc/postfix/sql/virtual-users.cf
-virtual_alias_maps = pgsql:/etc/postfix/sql/virtual-aliases.cf
+# Virtual Mailbox Settings (MongoDB Backend Prep)
+virtual_mailbox_domains = mongodb:/etc/postfix/mongodb-domains.cf
+virtual_mailbox_maps = mongodb:/etc/postfix/mongodb-users.cf
+virtual_alias_maps = mongodb:/etc/postfix/mongodb-aliases.cf
 
 # LMTP Delivery to Dovecot (Port 24)
 virtual_transport = lmtp:inet:dovecot:24
 
 # --- SASL Authentication (Dovecot Integration Prep) ---
-# Authentication will be activated in later phases
-smtpd_sasl_auth_enable = no
+smtpd_sasl_auth_enable = yes
 smtpd_sasl_type = dovecot
 smtpd_sasl_path = inet:dovecot:10001
 smtpd_sasl_security_options = noanonymous
@@ -36,7 +35,6 @@ smtpd_sasl_local_domain = $myhostname
 broken_sasl_auth_clients = yes
 
 # --- TLS Configuration (Placeholder Prep) ---
-# Path to TLS certificates (to be fully integrated with Let's Encrypt later)
 smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem
 smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key
 smtpd_use_tls = yes
@@ -56,8 +54,10 @@ milter_protocol = 6
 # --- SMTP Access Control and Restrictions ---
 smtpd_recipient_restrictions =
     permit_mynetworks,
+    permit_sasl_authenticated,
     defer_unauth_destination
 
 smtpd_relay_restrictions =
     permit_mynetworks,
+    permit_sasl_authenticated,
     defer_unauth_destination

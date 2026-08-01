@@ -1,0 +1,8 @@
+# Postfix MongoDB Aliases Lookup Map
+hosts = db:27017
+dbname = test
+username = admin
+password = admin_password
+collection = smtpcredentials
+query_filter = {"username": "%s", "status": "active", "isDeleted": false}
+result_attribute = username

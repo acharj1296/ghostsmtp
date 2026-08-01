@@ -1,0 +1,8 @@
+# Postfix MongoDB Domain Lookup Map
+hosts = db:27017
+dbname = test
+username = admin
+password = admin_password
+collection = domains
+query_filter = {"name": "%s", "status": "verified", "isDeleted": false}
+result_attribute = name

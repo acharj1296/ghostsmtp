@@ -127,6 +127,8 @@ services:
     build: ./docker/mail/dovecot
     container_name: ghostsmtp-dovecot
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "143:143" # IMAP
     volumes:

@@ -1,23 +1,24 @@
 FROM alpine:3.19
 
-# Install Dovecot, LMTP, and PostgreSQL auth modules
+# Install Dovecot, LMTP, Curl for Auth helpers, and timezone data
 RUN apk add --no-cache \
     dovecot \
     dovecot-lmtpd \
-    dovecot-pgsql \
+    curl \
     ca-certificates \
     tzdata
 
 # Create dovecot directory and user config paths
-RUN mkdir -p /etc/dovecot/conf.d /var/mail /var/run/dovecot
+RUN mkdir -p /etc/dovecot /var/mail /var/run/dovecot
 
 # Copy configs
 COPY dovecot.conf /etc/dovecot/dovecot.conf
-COPY dovecot-sql.conf.ext /etc/dovecot/dovecot-sql.conf.ext
+COPY auth-helper.sh /etc/dovecot/auth-helper.sh
 
-# Adjust ownership
+# Adjust ownership and permissions
 RUN chown -R root:root /etc/dovecot && \
-    chmod 0644 /etc/dovecot/dovecot.conf /etc/dovecot/dovecot-sql.conf.ext
+    chmod 0644 /etc/dovecot/dovecot.conf && \
+    chmod 0755 /etc/dovecot/auth-helper.sh
 
 EXPOSE 24 10001
 

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { DomainRepository } from '../repositories/domain.repository';
 import { EmailLogRepository } from '../repositories/emailLog.repository';
+import { SuppressionRepository } from '../repositories/suppression.repository';
 import { QueueService } from './queue.service';
 
 const emailAddressSchema = z.string().email();
@@ -40,6 +41,16 @@ export class EmailSendService {
     const totalRecipients = emailData.to.length + emailData.cc.length + emailData.bcc.length;
     if (totalRecipients > 50) {
       throw new Error('Maximum recipients threshold exceeded (max 50).');
+    }
+
+    // Validate recipient suppressions (Global and Workspace level)
+    const suppressionRepo = new SuppressionRepository();
+    const allRecipients = [...emailData.to, ...emailData.cc, ...emailData.bcc];
+    for (const r of allRecipients) {
+      const suppressed = await suppressionRepo.findSuppressed(workspaceId, r);
+      if (suppressed) {
+        throw new Error(`Recipient address "${r}" is suppressed.`);
+      }
     }
 
     // 3. Sender domain validation

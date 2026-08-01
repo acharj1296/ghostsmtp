@@ -6,8 +6,14 @@ export class SuppressionRepository extends BaseRepository<ISuppression> {
     super(SuppressionModel);
   }
 
-  async findByEmail(workspaceId: string, email: string): Promise<ISuppression | null> {
-    return this.findOne({ workspaceId, email: email.toLowerCase() });
+  async findSuppressed(workspaceId: string, email: string): Promise<ISuppression | null> {
+    const cleanEmail = email.toLowerCase().trim();
+    return this.model.findOne({
+      $or: [
+        { scope: 'global', email: cleanEmail },
+        { scope: 'workspace', workspaceId, email: cleanEmail }
+      ]
+    }).exec();
   }
 
   // Override delete to do hard delete for suppression list entries

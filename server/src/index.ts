@@ -7,6 +7,7 @@ import domainRouter from './routes/domain.routes';
 import credentialRouter from './routes/credential.routes';
 import internalRouter from './routes/internal.routes';
 import emailRouter from './routes/email.routes';
+import webhookRouter from './routes/webhook.routes';
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use('/api/v1/domains', domainRouter);
 app.use('/api/v1/credentials', credentialRouter);
 app.use('/api/v1/internal', internalRouter);
 app.use('/api/v1/emails', emailRouter);
+app.use('/api/v1/webhooks', webhookRouter);
 
 // Health Check Endpoint (Includes MongoDB status check)
 app.get('/api/v1/health', (req, res) => {

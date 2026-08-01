@@ -11,7 +11,8 @@
     "test:queue": "ts-node-dev --transpile-only src/tests/queue.test.ts",
     "test:send": "ts-node-dev --transpile-only src/tests/emailSend.test.ts",
     "test:tracking": "ts-node-dev --transpile-only src/tests/deliveryTracking.test.ts",
-    "test:bounce": "ts-node-dev --transpile-only src/tests/bounceComplaint.test.ts"
+    "test:bounce": "ts-node-dev --transpile-only src/tests/bounceComplaint.test.ts",
+    "test:webhook": "ts-node-dev --transpile-only src/tests/webhook.test.ts"
   },
   "dependencies": {
     "argon2": "^0.45.1",

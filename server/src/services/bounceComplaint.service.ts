@@ -105,6 +105,18 @@ export class BounceComplaintService {
         scope: 'workspace',
       });
       console.log(`[Suppression Service] Address ${cleanEmail} added to suppression list (reason: ${reason}).`);
+
+      try {
+        const { WebhookService } = await import('./webhook.service');
+        const webhookService = new WebhookService();
+        await webhookService.triggerEvent(workspaceId, 'suppressed', {
+          email: cleanEmail,
+          reason,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err: any) {
+        console.error(`[BounceComplaintService] Webhook trigger suppressed error: ${err.message}`);
+      }
     }
   }
 }

@@ -48,7 +48,27 @@ export class StatusUpdateService {
       retryCount: options?.retryCount,
     });
 
-    // 4. Trigger future callback events placeholders
+    // 4. Dispatch webhook event if subscribing
+    const webhookEventsList = ['queued', 'processing', 'sent', 'delivered', 'deferred', 'bounced', 'complained', 'suppressed', 'opened', 'clicked'];
+    if (webhookEventsList.includes(status)) {
+      try {
+        const { WebhookService } = await import('./webhook.service');
+        const webhookService = new WebhookService();
+        await webhookService.triggerEvent(workspaceId, status as any, {
+          messageId,
+          queueId,
+          recipient: emailLog.recipient,
+          sender: emailLog.sender,
+          subject: emailLog.subject,
+          smtpResponse: options?.smtpResponse,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err: any) {
+        console.error(`[StatusUpdateService] Failed to dispatch webhook event: ${err.message}`);
+      }
+    }
+
+    // 5. Trigger future callback events placeholders
     switch (status) {
       case 'delivered':
         await this.onDelivery(messageId);

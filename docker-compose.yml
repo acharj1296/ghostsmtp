@@ -37,7 +37,7 @@ services:
     networks:
       - db-network
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' localhost:27017/test --quiet || exit 1"]
+      test: ["CMD-SHELL", "mongosh --eval 'db.runCommand(\"ping\").ok' 127.0.0.1:27017/test --quiet || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -61,7 +61,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8081 || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-admin_password}@127.0.0.1:8081 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -97,7 +97,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8081 || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:8081 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -116,7 +116,7 @@ services:
     networks:
       - web-network
     healthcheck:
-      test: ["CMD-SHELL", "nginx -t && wget --quiet --tries=1 --spider http://localhost || exit 1"]
+      test: ["CMD-SHELL", "nginx -t && wget --quiet --tries=1 --spider http://127.0.0.1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -140,7 +140,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 24 || exit 1"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 24 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -161,7 +161,7 @@ services:
       dovecot:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 25 || exit 1"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 25 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -175,7 +175,7 @@ services:
     networks:
       - mail-network
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 12345 || exit 1"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 12345 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -187,7 +187,7 @@ services:
     networks:
       - mail-network
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 54321 || exit 1"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 54321 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -208,7 +208,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:11334/ || exit 1"]
+      test: ["CMD", "rspamc", "uptime"]
       interval: 15s
       timeout: 5s
       retries: 3

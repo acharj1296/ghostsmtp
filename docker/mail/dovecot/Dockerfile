@@ -1,12 +1,24 @@
 FROM alpine:3.19
 
-# Install Dovecot, LMTP, Curl for Auth helpers, and timezone data
+# Install Dovecot, LMTP, Curl for Auth helpers, openssl to generate ssl cert, and timezone data
 RUN apk add --no-cache \
     dovecot \
     dovecot-lmtpd \
     curl \
     ca-certificates \
+    openssl \
     tzdata
+
+# Create vmail user and group with UID/GID 1000
+RUN addgroup -g 1000 vmail && \
+    adduser -u 1000 -G vmail -S -D -H vmail
+
+# Generate self-signed SSL certificates for Dovecot
+RUN mkdir -p /etc/ssl/private && \
+    openssl req -new -x509 -days 3650 -nodes \
+      -out /etc/ssl/certs/ssl-cert-snakeoil.pem \
+      -keyout /etc/ssl/private/ssl-cert-snakeoil.key \
+      -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=localhost"
 
 # Create dovecot directory and user config paths
 RUN mkdir -p /etc/dovecot /var/mail /var/run/dovecot

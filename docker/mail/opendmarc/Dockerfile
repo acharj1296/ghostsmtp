@@ -5,6 +5,10 @@ RUN apk add --no-cache \
     opendmarc \
     tzdata
 
+# Create opendmarc group and user if they don't exist
+RUN addgroup -S opendmarc 2>/dev/null || true && \
+    adduser -S -G opendmarc opendmarc 2>/dev/null || true
+
 # Create necessary directories
 RUN mkdir -p /var/run/opendmarc && \
     chown -R opendmarc:opendmarc /var/run/opendmarc

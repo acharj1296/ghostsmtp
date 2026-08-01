@@ -4,7 +4,7 @@ import { QueueService } from '../services/queue.service';
 import { WorkspaceRepository } from '../repositories/workspace.repository';
 import { QueueJobRepository } from '../repositories/queueJob.repository';
 
-const TEST_MONGO_URI = process.env.MONGO_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
+const TEST_MONGO_URI = process.env.MONGODB_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
 
 async function runQueueTests() {
   console.log('--- Starting Mail Queue Infrastructure Integration Tests ---');

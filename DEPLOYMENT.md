@@ -59,7 +59,7 @@ NODE_ENV=production
 PORT=4000
 
 # Database & Cache Locations
-MONGO_URI=mongodb://admin:admin_password@db:27017/ghostsmtp?authSource=admin
+MONGODB_URI=mongodb://admin:admin_password@db:27017/ghostsmtp?authSource=admin
 REDIS_URL=redis://redis:6379
 
 # Firebase Admin Configurations

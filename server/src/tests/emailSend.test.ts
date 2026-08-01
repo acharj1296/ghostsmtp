@@ -5,7 +5,7 @@ import { WorkspaceRepository } from '../repositories/workspace.repository';
 import { DomainRepository } from '../repositories/domain.repository';
 import { EmailLogModel } from '../models/emailLog.model';
 
-const TEST_MONGO_URI = process.env.MONGO_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
+const TEST_MONGO_URI = process.env.MONGODB_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
 
 async function runSendTests() {
   console.log('--- Starting Email Sending Engine Integration Tests ---');

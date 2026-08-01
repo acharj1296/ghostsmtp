@@ -8,7 +8,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
-  MONGO_URI: z.string().default('mongodb://admin:admin_password@localhost:27017/ghostsmtp?authSource=admin'),
+  MONGODB_URI: z.string().default('mongodb://admin:admin_password@localhost:27017/ghostsmtp?authSource=admin'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   FIREBASE_PROJECT_ID: z.string().default('ghostsmtp-prod'),
   FIREBASE_PRIVATE_KEY_ID: z.string().optional(),

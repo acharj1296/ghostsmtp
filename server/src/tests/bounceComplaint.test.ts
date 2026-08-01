@@ -6,7 +6,7 @@ import { BounceEventModel } from '../models/bounceEvent.model';
 import { ComplaintEventModel } from '../models/complaintEvent.model';
 import { SuppressionModel } from '../models/suppression.model';
 
-const TEST_MONGO_URI = process.env.MONGO_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
+const TEST_MONGO_URI = process.env.MONGODB_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
 
 async function runBounceTests() {
   console.log('--- Starting Bounce & Complaint Processing Integration Tests ---');

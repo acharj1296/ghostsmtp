@@ -7,7 +7,7 @@ import { WebhookModel } from '../models/webhook.model';
 import { WebhookEventModel } from '../models/webhookEvent.model';
 import { WebhookDeliveryModel } from '../models/webhookDelivery.model';
 
-const TEST_MONGO_URI = process.env.MONGO_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
+const TEST_MONGO_URI = process.env.MONGODB_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
 
 async function runWebhookTests() {
   console.log('--- Starting Webhook Infrastructure Integration Tests ---');

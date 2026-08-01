@@ -4,7 +4,7 @@ import { SmtpCredentialRepository } from '../repositories/smtpCredential.reposit
 import { WorkspaceRepository } from '../repositories/workspace.repository';
 import { SecurityService } from '../services/security.service';
 
-const TEST_MONGO_URI = process.env.MONGO_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
+const TEST_MONGO_URI = process.env.MONGODB_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
 
 async function runTests() {
   console.log('--- Starting SMTP Authentication Integration Tests ---');

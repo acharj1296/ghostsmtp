@@ -15,7 +15,7 @@ export const connectDatabase = async (): Promise<void> => {
       console.warn('[MongoDB] Connection disconnected.');
     });
 
-    await mongoose.connect(env.MONGO_URI, {
+    await mongoose.connect(env.MONGODB_URI, {
       autoIndex: true, // Auto-build indexes in development/production
     });
   } catch (error) {

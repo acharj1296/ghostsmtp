@@ -6,7 +6,7 @@ export interface IEmailLog extends Document {
   sender: string;
   recipient: string;
   subject: string;
-  status: 'queued' | 'processing' | 'sent' | 'failed';
+  status: 'queued' | 'processing' | 'accepted' | 'sent' | 'delivered' | 'deferred' | 'bounced' | 'complained' | 'failed';
   retryCount: number;
   messageId: string; // Unique SMTP Message ID
   smtpResponse?: string;
@@ -27,7 +27,7 @@ const EmailLogSchema = new Schema<IEmailLog>(
       type: String,
       required: true,
       default: 'queued',
-      enum: ['queued', 'processing', 'sent', 'failed'],
+      enum: ['queued', 'processing', 'accepted', 'sent', 'delivered', 'deferred', 'bounced', 'complained', 'failed'],
       index: true,
     },
     retryCount: { type: Number, required: true, default: 0 },

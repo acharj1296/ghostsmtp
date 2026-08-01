@@ -1,22 +1,26 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { z } from 'zod';
 
-// Load .env from root directory of server
+// Load .env
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-export const env = {
-  NODE_ENV: process.env.NODE_ENV || 'development',
-  PORT: parseInt(process.env.PORT || '4000', 10),
-  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://ghost_user:ghost_password@localhost:5432/ghostsmtp',
-  REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
-};
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: z.coerce.number().default(4000),
+  MONGO_URI: z.string().default('mongodb://admin:admin_password@localhost:27017/ghostsmtp?authSource=admin'),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+  FIREBASE_PROJECT_ID: z.string().default('ghostsmtp-prod'),
+  FIREBASE_PRIVATE_KEY_ID: z.string().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().default('-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----\n'),
+  FIREBASE_CLIENT_EMAIL: z.string().default('placeholder@ghostsmtp-prod.iam.gserviceaccount.com'),
+});
 
-// Simple sanity check of required configurations in production
-if (env.NODE_ENV === 'production') {
-  if (!process.env.DATABASE_URL) {
-    console.warn('[WARNING] DATABASE_URL is not set. Falling back to default.');
-  }
-  if (!process.env.REDIS_URL) {
-    console.warn('[WARNING] REDIS_URL is not set. Falling back to default.');
-  }
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  console.error('❌ Environment configuration validation failed:', parsed.error.format());
+  process.exit(1);
 }
+
+export const env = parsed.data;

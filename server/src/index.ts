@@ -2,49 +2,71 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env';
+import { connectDatabase, getDbStatus } from './db/mongoose';
 
 const app = express();
 
 // Apply global middlewares
 app.use(helmet());
 app.use(cors({
-  origin: '*', // We can restrict this in production configurations
+  origin: '*',
   credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health Check Endpoint
+// Health Check Endpoint (Includes MongoDB status check)
 app.get('/api/v1/health', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
+  const dbStatus = getDbStatus();
+  const isHealthy = dbStatus === 'connected';
+
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'healthy' : 'unhealthy',
     timestamp: new Date().toISOString(),
     env: env.NODE_ENV,
     uptime: process.uptime(),
-    version: '1.0.0'
+    version: '1.0.0',
+    services: {
+      mongodb: {
+        status: dbStatus,
+        healthy: isHealthy,
+      }
+    }
   });
 });
 
-// Start Express Server
-const server = app.listen(env.PORT, () => {
-  console.log(`[GhostSMTP API] Server is running on port ${env.PORT} in ${env.NODE_ENV} mode.`);
-});
+// Start Express Server & MongoDB Connection
+const startServer = async () => {
+  try {
+    // Establish DB Connection
+    await connectDatabase();
 
-// Graceful shutdown helper
-const gracefulShutdown = () => {
-  console.log('[GhostSMTP API] Shutting down gracefully...');
-  server.close(() => {
-    console.log('[GhostSMTP API] HTTP server closed.');
-    process.exit(0);
-  });
+    const server = app.listen(env.PORT, () => {
+      console.log(`[GhostSMTP API] Server is running on port ${env.PORT} in ${env.NODE_ENV} mode.`);
+    });
 
-  // Force close after 10s if connections persist
-  setTimeout(() => {
-    console.error('[GhostSMTP API] Force shutdown triggered.');
+    // Graceful shutdown helper
+    const gracefulShutdown = () => {
+      console.log('[GhostSMTP API] Shutting down gracefully...');
+      server.close(() => {
+        console.log('[GhostSMTP API] HTTP server closed.');
+        process.exit(0);
+      });
+
+      setTimeout(() => {
+        console.error('[GhostSMTP API] Force shutdown triggered.');
+        process.exit(1);
+      }, 10000);
+    };
+
+    process.on('SIGTERM', gracefulShutdown);
+    process.on('SIGINT', gracefulShutdown);
+  } catch (error) {
+    console.error('❌ Failed to boot GhostSMTP API server:', error);
     process.exit(1);
-  }, 10000);
+  }
 };
 
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+startServer();
+
 export default app;

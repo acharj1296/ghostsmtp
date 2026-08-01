@@ -55,6 +55,21 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
       } as any);
     }
 
+    if (user.workspaces.length === 0) {
+      const { WorkspaceRepository } = await import('../repositories/workspace.repository');
+      const workspaceRepo = new WorkspaceRepository();
+      const newWorkspace = await workspaceRepo.create({
+        name: 'Default Workspace',
+        plan: 'free',
+      } as any);
+
+      user.workspaces.push({
+        workspaceId: newWorkspace.id as any,
+        role: 'owner',
+      } as any);
+      await user.save();
+    }
+
     req.user = user;
 
     // Tenant Isolation Check (X-Workspace-ID header)

@@ -16,7 +16,7 @@ export const Login = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await login();
+      await login(email, password);
     } catch (err) {
       console.error(err);
     } finally {

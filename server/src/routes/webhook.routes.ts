@@ -9,6 +9,7 @@ const controller = new WebhookController();
 router.use(authenticateUser);
 
 router.post('/', controller.create);
+router.get('/', controller.list);
 router.patch('/:id/status', controller.updateStatus);
 router.post('/:id/rotate', controller.rotate);
 router.post('/:id/test', controller.test);

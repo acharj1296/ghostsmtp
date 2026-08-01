@@ -25,6 +25,13 @@ export class WebhookService {
   }
 
   /**
+   * Lists all registered webhooks for a workspace.
+   */
+  async listWebhooks(workspaceId: string) {
+    return this.webhookRepo.find({ workspaceId, isDeleted: false });
+  }
+
+  /**
    * Toggles webhook state.
    */
   async updateWebhookStatus(workspaceId: string, webhookId: string, active: boolean) {

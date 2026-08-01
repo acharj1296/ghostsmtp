@@ -33,6 +33,20 @@ export class WebhookController {
     }
   }
 
+  async list(req: Request, res: Response) {
+    const workspaceId = req.workspaceId;
+    if (!workspaceId) {
+      return res.status(400).json({ error: 'Missing active workspace identification.' });
+    }
+
+    try {
+      const result = await webhookService.listWebhooks(workspaceId);
+      return res.status(200).json(result);
+    } catch (error: any) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   async updateStatus(req: Request, res: Response) {
     const workspaceId = req.workspaceId;
     const { id } = req.params;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from "react-router-dom";
 import { useAuth } from '../context/AuthContext';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -8,6 +9,7 @@ import { Server } from 'lucide-react';
 
 export const Login = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,6 +19,9 @@ export const Login = () => {
     setLoading(true);
     try {
       await login(email, password);
+      navigate("/dashboard", {
+        replace: true,
+      });
     } catch (err) {
       console.error(err);
     } finally {

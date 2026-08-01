@@ -24,7 +24,7 @@ export const Domains = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [newDomainName, setNewDomainName] = useState('');
-  
+
   // Notification states
   const [notify, setNotify] = useState({ show: false, title: '', message: '', type: 'info' as any });
 
@@ -140,6 +140,13 @@ export const Domains = () => {
     createMutation.mutate(newDomainName.trim());
   };
 
+  // MX record parsing
+  const mxRecord = domainDetails?.dnsRecords?.mx?.value ?? "";
+  const mxParts = mxRecord.split(" ");
+
+  const mxPriority = mxParts[0] ?? "";
+  const mxValue = mxParts.slice(1).join(" ");
+
   return (
     <div className="space-y-6">
       <Notification
@@ -155,8 +162,8 @@ export const Domains = () => {
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Domains</h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm">Configure SPF, DKIM, and DMARC parameters to send mail from custom hosts.</p>
         </div>
-        <Button 
-          variant="primary" 
+        <Button
+          variant="primary"
           onClick={() => setIsCreateOpen(true)}
           className="flex items-center gap-2 self-start sm:self-auto"
         >
@@ -211,18 +218,18 @@ export const Domains = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="flex items-center gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setSelectedDomainId(d._id)}
                             className="flex items-center gap-1 text-slate-600 dark:text-slate-300"
                           >
                             <Eye className="w-4 h-4" />
                             Details
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => deleteMutation.mutate(d._id)}
                             className="flex items-center gap-1 text-rose-500 hover:text-rose-600"
                           >
@@ -554,9 +561,13 @@ export const Domains = () => {
 
                       {/* MX */}
                       <div className="space-y-1">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">MX Records</span>
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                            MX Records
+                          </span>
+
                         <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-3 rounded-lg text-xs space-y-2">
                             <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+
                               <div className="flex justify-between">
                                 <h3 className="font-semibold">MX Record</h3>
 
@@ -586,12 +597,11 @@ export const Domains = () => {
 
                                 <div>
                                   <p className="text-slate-400">Priority</p>
-                                  <p>10</p>
+                                  <p>{mxPriority}</p>
                                 </div>
 
                                 <div>
                                   <p className="text-slate-400">Host</p>
-
                                   <p className="font-mono break-all">
                                     {domainDetails?.dnsRecords?.mx?.host}
                                   </p>
@@ -602,7 +612,7 @@ export const Domains = () => {
                                 <p className="text-slate-400 mb-2">Value</p>
 
                                 <pre className="rounded-lg bg-black p-3 text-xs font-mono whitespace-pre-wrap break-all">
-                                  {domainDetails?.dnsRecords?.mx?.value}
+                                  {mxValue}
                                 </pre>
                               </div>
 
@@ -625,7 +635,7 @@ export const Domains = () => {
                                   variant="outline"
                                   onClick={() =>
                                     copyToClipboard(
-                                      domainDetails?.dnsRecords?.mx?.value ?? "",
+                                      mxValue,
                                       "MX Value"
                                     )
                                   }
@@ -633,13 +643,14 @@ export const Domains = () => {
                                   Copy Value
                                 </Button>
                               </div>
+
                             </div>
                         </div>
                       </div>
                     </div>
 
-                    <Button 
-                      variant="primary" 
+                      <Button
+                        variant="primary"
                       onClick={() => verifyMutation.mutate(selectedDomainId)}
                       isLoading={verifyMutation.isPending}
                       className="w-full flex justify-center items-center gap-2"

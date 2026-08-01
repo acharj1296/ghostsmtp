@@ -73,16 +73,35 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
     req.user = user;
 
     // Tenant Isolation Check (X-Workspace-ID header)
+
     const workspaceIdHeader = req.headers['x-workspace-id'];
+
     if (workspaceIdHeader && typeof workspaceIdHeader === 'string') {
-      const isMember = user.workspaces.some(
+
+  const isMember = user.workspaces.some(
         (w) => w.workspaceId.toString() === workspaceIdHeader
-      );
-      if (!isMember) {
-        return res.status(403).json({ error: 'Forbidden. User does not have access to this workspace.' });
-      }
-      req.workspaceId = workspaceIdHeader;
+    );
+
+  if (!isMember) {
+      return res.status(403).json({
+        error: 'Forbidden. User does not have access to this workspace.'
+      });
     }
+
+  req.workspaceId = workspaceIdHeader;
+
+} else {
+
+  // Automatically use the first workspace
+  if (user.workspaces.length > 0) {
+    req.workspaceId = user.workspaces[0].workspaceId.toString();
+  } else {
+    return res.status(400).json({
+      error: 'No workspace assigned to this user.'
+    });
+  }
+
+}
 
     next();
   } catch (error: any) {

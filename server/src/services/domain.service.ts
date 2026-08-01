@@ -117,7 +117,38 @@ export class DomainService {
     const dkim = await this.dkimRepo.findByDomainId(domainId);
     const verification = await this.verificationRepo.findByDomainId(domainId);
 
-    return { domain, dkim, verification };
+    return {
+      domain,
+
+      dnsRecords: {
+        dkim: {
+          host: `${dkim?.selector}._domainkey.${domain.name}`,
+          value: verification?.dkimRecord,
+        },
+
+        spf: {
+          host: "@",
+          value: verification?.spfRecord,
+        },
+
+        dmarc: {
+          host: `_dmarc.${domain.name}`,
+          value: verification?.dmarcRecord,
+        },
+
+        mx: {
+          host: domain.name,
+          value: verification?.mxRecord,
+        },
+
+        cname: {
+          host: `tracking.${domain.name}`,
+          value: verification?.cnameRecord,
+        },
+      },
+
+      verification,
+    };
   }
 
   async verifyDomain(workspaceId: string, domainId: string) {

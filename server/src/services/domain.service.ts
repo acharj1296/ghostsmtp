@@ -1,10 +1,16 @@
 import { generateKeyPairSync } from 'crypto';
 import dns from 'dns';
+dns.setServers([
+  "1.1.1.1",
+  "8.8.8.8",
+]);
 import { DomainRepository } from '../repositories/domain.repository';
 import { DkimKeyRepository } from '../repositories/dkimKey.repository';
 import { DomainVerificationRepository } from '../repositories/domainVerification.repository';
 
+
 const dnsPromises = dns.promises;
+console.log(dns.getServers());
 
 export class DomainService {
   private domainRepo = new DomainRepository();
@@ -152,6 +158,7 @@ export class DomainService {
   }
 
   async verifyDomain(workspaceId: string, domainId: string) {
+    console.log(dns.getServers());
     const domain = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
     if (!domain) {
       throw new Error('Domain not found.');
@@ -168,64 +175,97 @@ export class DomainService {
     let spfVerified = false;
     try {
       const txtRecords = await dnsPromises.resolveTxt(domain.name);
+      console.log("TXT Records:", txtRecords);
       spfVerified = txtRecords.some(record => 
         record.join('').includes('v=spf1') && record.join('').includes('relay.ghostsmtp.com')
       );
-    } catch (e) {}
+      console.log("SPF TXT:", txtRecords);
+      console.log("Expected SPF:", verification.spfRecord);
+      console.log("SPF Verified:", spfVerified);
+    } catch (e) {
+      console.error("SPF ERROR:", e);
+    }
 
     // DKIM Verification
     let dkimVerified = false;
     try {
       const dkimDomain = `${dkim.selector}._domainkey.${domain.name}`;
       const txtRecords = await dnsPromises.resolveTxt(dkimDomain);
+      console.log("DKIM TXT:", txtRecords);
       dkimVerified = txtRecords.some(record => 
         record.join('').includes('v=DKIM1') && record.join('').includes(dkim.publicKey)
       );
-    } catch (e) {}
+      console.log("DKIM TXT:", txtRecords);
+      console.log("Expected Public Key:", dkim.publicKey);
+      console.log("DKIM Verified:", dkimVerified);
+    } catch (e) {
+      console.error("DKIM ERROR:", e);
+    }
 
     // DMARC Verification
     let dmarcVerified = false;
     try {
       const dmarcDomain = `_dmarc.${domain.name}`;
       const txtRecords = await dnsPromises.resolveTxt(dmarcDomain);
+      console.log("DMARC TXT:", txtRecords);
       dmarcVerified = txtRecords.some(record => 
         record.join('').includes('v=DMARC1')
       );
-    } catch (e) {}
+      console.log("DMARC TXT:", txtRecords);
+      console.log("Expected DMARC:", verification.dmarcRecord);
+      console.log("DMARC Verified:", dmarcVerified);
+    } catch (e) {
+      console.error("DMARC ERROR:", e);
+    }
 
     // MX Verification
     let mxVerified = false;
     try {
       const mxRecords = await dnsPromises.resolveMx(domain.name);
+      console.log("MX Records:", mxRecords);
       mxVerified = mxRecords.some(record => 
         record.exchange.includes('mail.ghostsmtp.com')
       );
-    } catch (e) {}
-
-    // CNAME Tracking Verification
-    let cnameVerified = false;
-    try {
-      const cnameDomain = `tracking.${domain.name}`;
-      const cnames = await dnsPromises.resolveCname(cnameDomain);
-      cnameVerified = cnames.some(cname => 
-        cname.includes('tracking.ghostsmtp.com')
-      );
-    } catch (e) {}
+      console.log("MX Records:", mxRecords);
+      console.log("Expected MX:", verification.mxRecord);
+      console.log("MX Verified:", mxVerified);
+    } catch (e) {
+      console.error("MX ERROR:", e);
+    }
 
     // Update flags
     verification.spfVerified = spfVerified;
     verification.dkimVerified = dkimVerified;
     verification.dmarcVerified = dmarcVerified;
     verification.mxVerified = mxVerified;
-    verification.cnameVerified = cnameVerified;
     verification.lastVerifiedAt = new Date();
+    console.log("SPF:", spfVerified);
+    console.log("DKIM:", dkimVerified);
+    console.log("DMARC:", dmarcVerified);
+    console.log("MX:", mxVerified);
     await verification.save();
 
     // Check overall verification status
     // Domain is verified if SPF, DKIM, and DMARC parameters are satisfied
-    const matchesAllEssential = spfVerified && dkimVerified && dmarcVerified;
+    const totalChecks = [
+      spfVerified,
+      dkimVerified,
+      dmarcVerified,
+      mxVerified,
+    ];
+
+    const verifiedCount = totalChecks.filter(Boolean).length;
+
     const oldStatus = domain.status;
-    domain.status = matchesAllEssential ? 'verified' : 'failed';
+
+    if (verifiedCount === totalChecks.length) {
+      domain.status = "verified";
+    } else if (verifiedCount === 0) {
+      domain.status = "pending";
+    } else {
+      domain.status = "failed";
+    }
+
     await domain.save();
 
     // Audit or log change if status transitioned
@@ -233,6 +273,10 @@ export class DomainService {
       console.log(`[Domain Service] Domain ${domain.name} status updated to: ${domain.status}`);
     }
 
-    return { domain, verification };
+    return {
+      status: domain.status,
+      domain,
+      verification,
+    };
   }
 }

@@ -8,8 +8,17 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Badge } from '../components/ui/badge';
 import { Dialog } from '../components/ui/dialog';
 import { Notification } from '../components/ui/notification';
-import { Globe, Plus, Trash2, Eye, ShieldAlert, CheckCircle, RefreshCw } from 'lucide-react';
+import {
+  Globe,
+  Plus,
+  Trash2,
+  Eye,
+  ShieldAlert,
+  CheckCircle,
+  RefreshCw
+} from 'lucide-react';
 
+// Domains Page Component
 export const Domains = () => {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -23,6 +32,27 @@ export const Domains = () => {
     setNotify({ show: true, title, message, type });
   };
 
+  // Function to copy text to clipboard
+  const copyToClipboard = async (text: string, label: string) => {
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+
+      showNotification(
+        "Copied",
+        `${label} copied to clipboard.`,
+        "success"
+      );
+    } catch {
+      showNotification(
+        "Error",
+        `Failed to copy ${label}.`,
+        "error"
+      );
+    }
+  };
+
   // Queries
   const { data: domains = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['domains'],
@@ -32,6 +62,7 @@ export const Domains = () => {
     },
   });
 
+  // Fetch details for the selected domain
   const { data: domainDetails, isLoading: isDetailsLoading } = useQuery({
     queryKey: ['domain', selectedDomainId],
     queryFn: async () => {
@@ -60,6 +91,7 @@ export const Domains = () => {
     },
   });
 
+  //
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiClient.delete(`/domains/${id}`);
@@ -74,6 +106,7 @@ export const Domains = () => {
     },
   });
 
+  // Verify DNS records mutation
   const verifyMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiClient.post(`/domains/${id}/verify`);
@@ -82,10 +115,18 @@ export const Domains = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['domains'] });
       queryClient.invalidateQueries({ queryKey: ['domain', selectedDomainId] });
-      if (data.status === 'verified') {
+      if (data.domain.status === "verified") {
         showNotification('Verified', 'Domain DNS records successfully verified and activated!', 'success');
-      } else {
+      }
+      else if (data.domain.status === "failed") {
         showNotification('Unverified', 'Verification lookup failed. Ensure DNS updates have propagated.', 'warning');
+      }
+      else {
+        showNotification(
+          "Pending",
+          "DNS records have not propagated yet.",
+          "info"
+        );
       }
     },
     onError: (err: any) => {
@@ -226,8 +267,129 @@ export const Domains = () => {
                       <div className="space-y-1">
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">DKIM Records</span>
                         <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-3 rounded-lg text-xs space-y-2">
-                          <p><strong>Host:</strong> {domainDetails?.dnsRecords?.dkim?.host}</p>
-                          <p className="break-all font-mono"><strong>Value:</strong> {domainDetails?.dnsRecords?.dkim?.value}</p>
+                            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+
+                              <div className="flex justify-between">
+
+                                <h3 className="font-semibold">
+
+                                  DKIM Record
+
+                                </h3>
+
+                                <Badge
+                                  variant={
+                                    domainDetails?.verification?.dkimVerified
+                                      ? "success"
+                                      : "warning"
+                                  }
+                                >
+                                  {domainDetails?.verification?.dkimVerified
+                                    ? "Verified"
+                                    : "Pending"}
+                                </Badge>
+
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+
+                                <div>
+
+                                  <p className="text-slate-400">
+
+                                    Type
+
+                                  </p>
+
+                                  <p>
+
+                                    TXT
+
+                                  </p>
+
+                                </div>
+
+                                <div>
+
+                                  <p className="text-slate-400">
+
+                                    TTL
+
+                                  </p>
+
+                                  <p>
+
+                                    Auto
+
+                                  </p>
+
+                                </div>
+
+                                <div>
+
+                                  <p className="text-slate-400">
+
+                                    Host
+
+                                  </p>
+
+                                  <p className="font-mono break-all">
+
+                                    {domainDetails?.dnsRecords?.dkim?.host}
+
+                                  </p>
+
+                                </div>
+
+                              </div>
+
+                              <div>
+
+                                <p className="text-slate-400 mb-2">
+
+                                  Value
+
+                                </p>
+
+                                <pre className="rounded-lg bg-black p-3 text-xs font-mono whitespace-pre-wrap break-all">
+
+                                  {domainDetails?.dnsRecords?.dkim?.value}
+
+                                </pre>
+
+                              </div>
+
+                              <div className="flex gap-2">
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      domainDetails?.dnsRecords?.dkim?.host ?? "",
+                                      "DKIM Host"
+                                    )
+                                  }
+                                >
+                                  Copy Host
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      domainDetails?.dnsRecords?.dkim?.value ?? "",
+                                      "DKIM Value"
+                                    )
+                                  }
+                                >
+                                  Copy Value
+                                </Button>
+
+                              </div>
+
+                            </div>
                         </div>
                       </div>
 
@@ -235,8 +397,78 @@ export const Domains = () => {
                       <div className="space-y-1">
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">SPF Records</span>
                         <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-3 rounded-lg text-xs space-y-2">
-                          <p><strong>Host:</strong> {domainDetails?.dnsRecords?.spf?.host}</p>
-                          <p className="break-all font-mono"><strong>Value:</strong> {domainDetails?.dnsRecords?.spf?.value}</p>
+                            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                              <div className="flex justify-between">
+                                <h3 className="font-semibold">SPF Record</h3>
+
+                                <Badge
+                                  variant={
+                                    domainDetails?.verification?.spfVerified
+                                      ? "success"
+                                      : "warning"
+                                  }
+                                >
+                                  {domainDetails?.verification?.spfVerified
+                                    ? "Verified"
+                                    : "Pending"}
+                                </Badge>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <p className="text-slate-400">Type</p>
+                                  <p>TXT</p>
+                                </div>
+
+                                <div>
+                                  <p className="text-slate-400">TTL</p>
+                                  <p>Auto</p>
+                                </div>
+
+                                <div className="col-span-2">
+                                  <p className="text-slate-400">Host</p>
+                                  <p className="font-mono">
+                                    {domainDetails?.dnsRecords?.spf?.host}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div>
+                                <p className="text-slate-400 mb-2">Value</p>
+
+                                <pre className="rounded-lg bg-black p-3 text-xs font-mono whitespace-pre-wrap break-all">
+                                  {domainDetails?.dnsRecords?.spf?.value}
+                                </pre>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      domainDetails?.dnsRecords?.spf?.host ?? "",
+                                      "SPF Host"
+                                    )
+                                  }
+                                >
+                                  Copy Host
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      domainDetails?.dnsRecords?.spf?.value ?? "",
+                                      "SPF Value"
+                                    )
+                                  }
+                                >
+                                  Copy Value
+                                </Button>
+                              </div>
+                            </div>
                         </div>
                       </div>
 
@@ -244,8 +476,79 @@ export const Domains = () => {
                       <div className="space-y-1">
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">DMARC Records</span>
                         <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-3 rounded-lg text-xs space-y-2">
-                          <p><strong>Host:</strong> {domainDetails?.dnsRecords?.dmarc?.host}</p>
-                          <p className="break-all font-mono"><strong>Value:</strong> {domainDetails?.dnsRecords?.dmarc?.value}</p>
+                            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                              <div className="flex justify-between">
+                                <h3 className="font-semibold">DMARC Record</h3>
+
+                                <Badge
+                                  variant={
+                                    domainDetails?.verification?.dmarcVerified
+                                      ? "success"
+                                      : "warning"
+                                  }
+                                >
+                                  {domainDetails?.verification?.dmarcVerified
+                                    ? "Verified"
+                                    : "Pending"}
+                                </Badge>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <p className="text-slate-400">Type</p>
+                                  <p>TXT</p>
+                                </div>
+
+                                <div>
+                                  <p className="text-slate-400">TTL</p>
+                                  <p>Auto</p>
+                                </div>
+
+                                <div className="col-span-2">
+                                  <p className="text-slate-400">Host</p>
+
+                                  <p className="font-mono break-all">
+                                    {domainDetails?.dnsRecords?.dmarc?.host}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div>
+                                <p className="text-slate-400 mb-2">Value</p>
+
+                                <pre className="rounded-lg bg-black p-3 text-xs font-mono whitespace-pre-wrap break-all">
+                                  {domainDetails?.dnsRecords?.dmarc?.value}
+                                </pre>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      domainDetails?.dnsRecords?.dmarc?.host ?? "",
+                                      "DMARC Host"
+                                    )
+                                  }
+                                >
+                                  Copy Host
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      domainDetails?.dnsRecords?.dmarc?.value ?? "",
+                                      "DMARC Value"
+                                    )
+                                  }
+                                >
+                                  Copy Value
+                                </Button>
+                              </div>
+                            </div>
                         </div>
                       </div>
 
@@ -253,8 +556,84 @@ export const Domains = () => {
                       <div className="space-y-1">
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">MX Records</span>
                         <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-3 rounded-lg text-xs space-y-2">
-                          <p><strong>Host:</strong> {domainDetails?.dnsRecords?.mx?.host}</p>
-                          <p className="break-all font-mono"><strong>Value:</strong> {domainDetails?.dnsRecords?.mx?.value}</p>
+                            <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 space-y-3">
+                              <div className="flex justify-between">
+                                <h3 className="font-semibold">MX Record</h3>
+
+                                <Badge
+                                  variant={
+                                    domainDetails?.verification?.mxVerified
+                                      ? "success"
+                                      : "warning"
+                                  }
+                                >
+                                  {domainDetails?.verification?.mxVerified
+                                    ? "Verified"
+                                    : "Pending"}
+                                </Badge>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <p className="text-slate-400">Type</p>
+                                  <p>MX</p>
+                                </div>
+
+                                <div>
+                                  <p className="text-slate-400">TTL</p>
+                                  <p>Auto</p>
+                                </div>
+
+                                <div>
+                                  <p className="text-slate-400">Priority</p>
+                                  <p>10</p>
+                                </div>
+
+                                <div>
+                                  <p className="text-slate-400">Host</p>
+
+                                  <p className="font-mono break-all">
+                                    {domainDetails?.dnsRecords?.mx?.host}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div>
+                                <p className="text-slate-400 mb-2">Value</p>
+
+                                <pre className="rounded-lg bg-black p-3 text-xs font-mono whitespace-pre-wrap break-all">
+                                  {domainDetails?.dnsRecords?.mx?.value}
+                                </pre>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      domainDetails?.dnsRecords?.mx?.host ?? "",
+                                      "MX Host"
+                                    )
+                                  }
+                                >
+                                  Copy Host
+                                </Button>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    copyToClipboard(
+                                      domainDetails?.dnsRecords?.mx?.value ?? "",
+                                      "MX Value"
+                                    )
+                                  }
+                                >
+                                  Copy Value
+                                </Button>
+                              </div>
+                            </div>
                         </div>
                       </div>
                     </div>

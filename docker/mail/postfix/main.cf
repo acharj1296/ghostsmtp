@@ -1,0 +1,63 @@
+# --- GhostSMTP Postfix main.cf Configuration ---
+
+# System Parameters
+myhostname = mail.ghostsmtp.com
+myorigin = $myhostname
+mydestination = localhost, localhost.localdomain
+relayhost =
+
+# Banner
+smtpd_banner = $myhostname ESMTP GhostSMTP Mail Server
+
+# Queue & Size Restrictions
+message_size_limit = 26214400
+mailbox_size_limit = 0
+recipient_delimiter = +
+
+# Local network settings
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+
+# Virtual Mailbox Settings (PostgreSQL Backend Prep)
+virtual_mailbox_domains = pgsql:/etc/postfix/sql/virtual-domains.cf
+virtual_mailbox_maps = pgsql:/etc/postfix/sql/virtual-users.cf
+virtual_alias_maps = pgsql:/etc/postfix/sql/virtual-aliases.cf
+
+# LMTP Delivery to Dovecot (Port 24)
+virtual_transport = lmtp:inet:dovecot:24
+
+# --- SASL Authentication (Dovecot Integration Prep) ---
+# Authentication will be activated in later phases
+smtpd_sasl_auth_enable = no
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = inet:dovecot:10001
+smtpd_sasl_security_options = noanonymous
+smtpd_sasl_tls_security_options = $smtpd_sasl_security_options
+smtpd_sasl_local_domain = $myhostname
+broken_sasl_auth_clients = yes
+
+# --- TLS Configuration (Placeholder Prep) ---
+# Path to TLS certificates (to be fully integrated with Let's Encrypt later)
+smtpd_tls_cert_file = /etc/ssl/certs/ssl-cert-snakeoil.pem
+smtpd_tls_key_file = /etc/ssl/private/ssl-cert-snakeoil.key
+smtpd_use_tls = yes
+smtpd_tls_security_level = may
+smtpd_tls_auth_only = no
+smtpd_tls_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+smtpd_tls_loglevel = 1
+
+# --- Milters Setup (OpenDKIM, OpenDMARC, Rspamd) ---
+# Postfix routes mail through the milters in series: OpenDKIM -> OpenDMARC -> Rspamd
+smtpd_milters = inet:opendkim:12345, inet:opendmarc:54321, inet:rspamd:11332
+non_smtpd_milters = $smtpd_milters
+milter_default_action = accept
+milter_protocol = 6
+
+# --- SMTP Access Control and Restrictions ---
+smtpd_recipient_restrictions =
+    permit_mynetworks,
+    defer_unauth_destination
+
+smtpd_relay_restrictions =
+    permit_mynetworks,
+    defer_unauth_destination

@@ -1,0 +1,3 @@
+# Mapping from sender address / domain to a key table identifier
+# Example:
+# *@example.com   default._domainkey.example.com

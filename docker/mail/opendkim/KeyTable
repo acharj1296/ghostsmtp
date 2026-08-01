@@ -1,0 +1,3 @@
+# Mapping from selector identifier to domain, selector and private key location
+# Example:
+# default._domainkey.example.com example.com:default:/etc/opendkim/keys/example.com/default.private

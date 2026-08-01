@@ -5,11 +5,21 @@ networks:
     driver: bridge
   web-network:
     driver: bridge
+  mail-network:
+    driver: bridge
 
 volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  postfix_spool:
+    driver: local
+  dovecot_mail:
+    driver: local
+  opendkim_keys:
+    driver: local
+  rspamd_data:
     driver: local
 
 services:
@@ -103,5 +113,95 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "nginx -t && wget --quiet --tries=1 --spider http://localhost || exit 1"]
       interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- Mail Infrastructure Services (Phase 3) ---
+
+  dovecot:
+    build: ./docker/mail/dovecot
+    container_name: ghostsmtp-dovecot
+    restart: unless-stopped
+    ports:
+      - "143:143" # IMAP
+    volumes:
+      - dovecot_mail:/var/mail
+    networks:
+      - mail-network
+      - db-network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 24 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  postfix:
+    build: ./docker/mail/postfix
+    container_name: ghostsmtp-postfix
+    restart: unless-stopped
+    ports:
+      - "25:25"   # SMTP
+      - "587:587" # SMTP Submission
+    volumes:
+      - postfix_spool:/var/spool/postfix
+    networks:
+      - mail-network
+      - db-network
+    depends_on:
+      dovecot:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 25 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  opendkim:
+    build: ./docker/mail/opendkim
+    container_name: ghostsmtp-opendkim
+    restart: unless-stopped
+    volumes:
+      - opendkim_keys:/etc/opendkim/keys
+    networks:
+      - mail-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 12345 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  opendmarc:
+    build: ./docker/mail/opendmarc
+    container_name: ghostsmtp-opendmarc
+    restart: unless-stopped
+    networks:
+      - mail-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 54321 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: ghostsmtp-rspamd
+    restart: unless-stopped
+    ports:
+      - "11334:11334" # Rspamd Controller & Web UI
+    volumes:
+      - ./docker/mail/rspamd/local.d:/etc/rspamd/local.d
+      - rspamd_data:/var/lib/rspamd
+    networks:
+      - mail-network
+      - cache-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:11334/ || exit 1"]
+      interval: 15s
       timeout: 5s
       retries: 3

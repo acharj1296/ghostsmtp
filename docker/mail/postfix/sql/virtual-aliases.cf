@@ -1,0 +1,5 @@
+hosts = db
+user = ghost_user
+password = ghost_password
+dbname = ghostsmtp
+query = SELECT destination FROM virtual_aliases WHERE source='%s' LIMIT 1

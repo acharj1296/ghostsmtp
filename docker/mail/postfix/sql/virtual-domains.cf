@@ -1,0 +1,5 @@
+hosts = db
+user = ghost_user
+password = ghost_password
+dbname = ghostsmtp
+query = SELECT 1 FROM domains WHERE name='%s' AND verified=true LIMIT 1

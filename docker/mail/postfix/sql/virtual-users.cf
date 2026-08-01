@@ -1,0 +1,5 @@
+hosts = db
+user = ghost_user
+password = ghost_password
+dbname = ghostsmtp
+query = SELECT email FROM smtp_users WHERE email='%s' AND active=true LIMIT 1

@@ -1,17 +1,30 @@
 import { Queue, Worker, Job } from 'bullmq';
 import crypto from 'crypto';
 import Redis from 'ioredis';
+import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 import { QueueJobRepository } from '../repositories/queueJob.repository';
+import { EmailLogRepository } from '../repositories/emailLog.repository';
 
 // Keep shared redis connections specifically for BullMQ
 const queueRedisConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const workerRedisConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
+// Initialize SMTP Transporter routing queries to local Postfix over port 25 or 587
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'postfix', // 'postfix' in docker network, defaults to localhost on host
+  port: parseInt(process.env.SMTP_PORT || '25', 10),
+  secure: false,
+  tls: {
+    rejectUnauthorized: false, // Bypass self-signed check for testing
+  },
+});
+
 export class QueueService {
   private queue: Queue;
   private worker: Worker | null = null;
   private queueJobRepo = new QueueJobRepository();
+  private emailLogRepo = new EmailLogRepository();
 
   constructor() {
     // 1. Initialize BullMQ Queue
@@ -23,7 +36,7 @@ export class QueueService {
           type: 'exponential',
           delay: 5000, // wait 5s, then 10s, etc.
         },
-        removeOnComplete: false, // Keep logs for status checks
+        removeOnComplete: false,
         removeOnFail: false,
       },
     });
@@ -32,8 +45,8 @@ export class QueueService {
   /**
    * Schedules/Queues an outbound email transmission.
    */
-  async addEmailJob(workspaceId: string, payload: { to: string; from: string; subject: string; body: string }, delayMs = 0) {
-    const messageId = `msg_${crypto.randomBytes(12).toString('hex')}`;
+  async addEmailJob(workspaceId: string, payload: { to: string[]; from: string; subject: string; text?: string; html?: string; cc?: string[]; bcc?: string[]; replyTo?: string; attachments?: any[]; headers?: any; messageId: string }, delayMs = 0) {
+    const messageId = payload.messageId;
 
     // Workspace and payload validation
     if (!payload.to || !payload.from || !payload.subject) {
@@ -87,25 +100,65 @@ export class QueueService {
     this.worker = new Worker(
       'email-queue',
       async (job: Job) => {
-        const { messageId, workspaceId } = job.data;
+        const { messageId, workspaceId, payload } = job.data;
         console.log(`[Worker] Started processing job: ${job.id} for msg: ${messageId}`);
 
-        // Update DB to processing
+        // Update DB statuses to processing
         const dbJob = await this.queueJobRepo.findByMessageId(messageId);
         if (dbJob) {
           dbJob.status = 'processing';
           await dbJob.save();
         }
 
-        // Mock delivery process (Do NOT send real mail, do NOT connect Postfix)
-        // Simulate random failure according to simulateFailureRatio parameter
-        if (simulateFailureRatio > 0 && Math.random() < simulateFailureRatio) {
-          throw new Error('Simulated transmission network timeout.');
+        const dbLog = await this.emailLogRepo.findByMessageId(messageId);
+        if (dbLog) {
+          dbLog.status = 'processing';
+          await dbLog.save();
         }
 
-        // Simulating processing latency
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        console.log(`[Worker] Job completed successfully: ${job.id}`);
+        // Test bypass check to avoid hanging without local docker containers active
+        if (process.env.NODE_ENV === 'test' && !process.env.SMTP_INTEGRATION_TEST) {
+          if (simulateFailureRatio > 0 && Math.random() < simulateFailureRatio) {
+            throw new Error('Simulated transmission network timeout.');
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          console.log(`[Worker Mock] Completed message: ${messageId}`);
+        } else {
+          // Format MIME attachments
+          const formattedAttachments = (payload.attachments || []).map((att: any) => ({
+            filename: att.filename,
+            content: Buffer.from(att.content, 'base64'),
+          }));
+
+          // Relaying SMTP Submission to Postfix
+          const info = await transporter.sendMail({
+            from: payload.from,
+            to: payload.to,
+            cc: payload.cc,
+            bcc: payload.bcc,
+            replyTo: payload.replyTo,
+            subject: payload.subject,
+            text: payload.text,
+            html: payload.html,
+            headers: {
+              ...payload.headers,
+              'Message-ID': messageId,
+            },
+            attachments: formattedAttachments,
+          });
+
+          console.log(`[Worker] Mail sent successfully via Postfix SMTP. Response: ${info.response}`);
+
+          if (dbLog) {
+            dbLog.status = 'sent';
+            dbLog.smtpResponse = info.response;
+            dbLog.deliveryMetadata = {
+              messageId: info.messageId,
+              envelope: info.envelope,
+            };
+            await dbLog.save();
+          }
+        }
       },
       {
         connection: workerRedisConnection,
@@ -121,6 +174,12 @@ export class QueueService {
         dbJob.status = 'completed';
         await dbJob.save();
       }
+
+      const dbLog = await this.emailLogRepo.findByMessageId(messageId);
+      if (dbLog && dbLog.status !== 'sent') {
+        dbLog.status = 'sent';
+        await dbLog.save();
+      }
     });
 
     // Handle failed events (including retries and dead-letter queue routing)
@@ -128,19 +187,33 @@ export class QueueService {
       if (!job) return;
       const { messageId } = job.data;
       const dbJob = await this.queueJobRepo.findByMessageId(messageId);
-      if (dbJob) {
-        dbJob.retryCount = job.attemptsMade;
-        dbJob.errorInfo = err.message;
+      const dbLog = await this.emailLogRepo.findByMessageId(messageId);
 
-        // Check if retry threshold is exhausted (moves to Dead Letter Queue state)
-        if (job.attemptsMade >= (job.opts.attempts || 3)) {
+      const attemptsMade = job.attemptsMade;
+      const maxAttempts = job.opts.attempts || 3;
+
+      if (dbJob) {
+        dbJob.retryCount = attemptsMade;
+        dbJob.errorInfo = err.message;
+        if (attemptsMade >= maxAttempts) {
           dbJob.status = 'failed';
           console.error(`[Worker] Job msg:${messageId} permanently failed. Moved to DLQ.`);
         } else {
           dbJob.status = 'retrying';
-          console.warn(`[Worker] Job msg:${messageId} failed (attempt ${job.attemptsMade}). Retrying...`);
+          console.warn(`[Worker] Job msg:${messageId} failed (attempt ${attemptsMade}). Retrying...`);
         }
         await dbJob.save();
+      }
+
+      if (dbLog) {
+        dbLog.retryCount = attemptsMade;
+        dbLog.errorReason = err.message;
+        if (attemptsMade >= maxAttempts) {
+          dbLog.status = 'failed';
+        } else {
+          dbLog.status = 'queued';
+        }
+        await dbLog.save();
       }
     });
   }

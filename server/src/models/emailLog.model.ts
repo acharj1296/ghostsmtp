@@ -6,11 +6,12 @@ export interface IEmailLog extends Document {
   sender: string;
   recipient: string;
   subject: string;
-  status: 'queued' | 'sent' | 'delivered' | 'bounced' | 'complaint' | 'failed';
-  errorReason?: string;
-  messageId?: string;
-  smtpStatusCode?: number;
+  status: 'queued' | 'processing' | 'sent' | 'failed';
   retryCount: number;
+  messageId: string; // Unique SMTP Message ID
+  smtpResponse?: string;
+  errorReason?: string;
+  deliveryMetadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,20 +26,22 @@ const EmailLogSchema = new Schema<IEmailLog>(
     status: {
       type: String,
       required: true,
-      enum: ['queued', 'sent', 'delivered', 'bounced', 'complaint', 'failed'],
+      default: 'queued',
+      enum: ['queued', 'processing', 'sent', 'failed'],
       index: true,
     },
-    errorReason: { type: String },
-    messageId: { type: String, index: true },
-    smtpStatusCode: { type: Number },
     retryCount: { type: Number, required: true, default: 0 },
+    messageId: { type: String, required: true, unique: true, index: true },
+    smtpResponse: { type: String },
+    errorReason: { type: String },
+    deliveryMetadata: { type: Schema.Types.Map, of: Schema.Types.Mixed },
   },
   {
     timestamps: true,
   }
 );
 
-// Compound indexes for metrics
+// Compound indexes for analytics metrics
 EmailLogSchema.index({ workspaceId: 1, status: 1, createdAt: -1 });
 
 export const EmailLogModel = model<IEmailLog>('EmailLog', EmailLogSchema);

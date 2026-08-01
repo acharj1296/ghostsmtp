@@ -8,6 +8,7 @@ declare global {
     interface Request {
       user?: any; // IUser type
       workspaceId?: string;
+      apiKey?: any;
     }
   }
 }

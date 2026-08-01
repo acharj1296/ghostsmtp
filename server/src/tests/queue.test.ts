@@ -44,13 +44,14 @@ async function runQueueTests() {
   try {
     // Test 1: Add a basic email job
     console.log('Queuing test job...');
-    const mailPayload = { to: 'recipient@domain.com', from: 'sender@domain.com', subject: 'Hello', body: 'World' };
-    const job1 = await queueService.addEmailJob(workspace.id, mailPayload);
+    const mailPayload1 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: 'msg_test_1' };
+    const job1 = await queueService.addEmailJob(workspace.id, mailPayload1);
     assert(job1.status === 'queued' && job1.retryCount === 0, 'Add Job: Job correctly created in queued status.');
 
     // Test 2: Add a delayed job
     console.log('Queuing delayed job...');
-    const job2 = await queueService.addEmailJob(workspace.id, mailPayload, 10000); // 10s delay
+    const mailPayload2 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: 'msg_test_2' };
+    const job2 = await queueService.addEmailJob(workspace.id, mailPayload2, 10000); // 10s delay
     assert(job2.status === 'pending', 'Delayed Job: Delayed job initialized in pending status.');
 
     // Test 3: Cancel Job
@@ -71,7 +72,8 @@ async function runQueueTests() {
 
     // Test 5: Worker failure and DLQ retry logic
     console.log('Queuing failed job to test DLQ backoff...');
-    const job3 = await queueService.addEmailJob(workspace.id, mailPayload);
+    const mailPayload3 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: 'msg_test_3' };
+    const job3 = await queueService.addEmailJob(workspace.id, mailPayload3);
     
     // Start worker with 100% failure ratio
     queueService.startWorker(1.0); // 100% failure ratio

@@ -6,6 +6,8 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
   sendEmailVerification,
+  signInWithPopup,
+  GoogleAuthProvider,
   User as FirebaseUser 
 } from 'firebase/auth';
 import { auth } from '../api/firebase';
@@ -14,6 +16,7 @@ interface User {
   uid: string;
   email: string;
   displayName: string;
+  emailVerified: boolean;
 }
 
 interface AuthContextType {
@@ -22,6 +25,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email?: string, password?: string) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -44,6 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           uid: 'mock-firebase-uid',
           email: localStorage.getItem('userEmail') || 'dev@ghostsmtp.com',
           displayName: 'GhostSMTP Developer',
+          emailVerified: true,
         });
       }
       setLoading(false);
@@ -59,6 +64,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              emailVerified: firebaseUser.emailVerified,
             });
           } catch (err) {
             console.error('Failed to get Firebase token:', err);
@@ -87,6 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           uid: 'mock-firebase-uid',
           email: email || 'dev@ghostsmtp.com',
           displayName: 'GhostSMTP Developer',
+          emailVerified: true,
         });
       } else {
         if (!email || !password) {
@@ -100,6 +107,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           uid: userCredential.user.uid,
           email: userCredential.user.email || '',
           displayName: userCredential.user.displayName || userCredential.user.email?.split('@')[0] || 'User',
+          emailVerified: userCredential.user.emailVerified,
         });
       }
     } finally {
@@ -120,6 +128,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           uid: 'mock-firebase-uid',
           email: email,
           displayName: displayName,
+          emailVerified: false, // For testing email verification flow in mock mode
         });
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -130,6 +139,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           uid: userCredential.user.uid,
           email: userCredential.user.email || '',
           displayName: displayName,
+          emailVerified: userCredential.user.emailVerified,
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    const isMock = !import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY === 'mock-api-key';
+
+    try {
+      if (isMock) {
+        localStorage.setItem('token', 'mock-google-token');
+        localStorage.setItem('userEmail', 'google-dev@ghostsmtp.com');
+        setUser({
+          uid: 'mock-google-uid',
+          email: 'google-dev@ghostsmtp.com',
+          displayName: 'Google Dev User',
+          emailVerified: true,
+        });
+      } else {
+        const provider = new GoogleAuthProvider();
+        const userCredential = await signInWithPopup(auth, provider);
+        const token = await userCredential.user.getIdToken(true);
+        localStorage.setItem('token', token);
+        localStorage.setItem('userEmail', userCredential.user.email || '');
+        setUser({
+          uid: userCredential.user.uid,
+          email: userCredential.user.email || '',
+          displayName: userCredential.user.displayName || 'Google User',
+          emailVerified: userCredential.user.emailVerified,
         });
       }
     } finally {
@@ -154,7 +196,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, register, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

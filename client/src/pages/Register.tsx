@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -9,7 +9,16 @@ import { Server, Eye, EyeOff, Check, X } from 'lucide-react';
 
 export const Register = () => {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, loginWithGoogle, user } = useAuth();
+
+  // Redirect directly if already logged in
+  if (user) {
+    if (user.emailVerified) {
+      return <Navigate to="/dashboard" replace />;
+    } else {
+      return <Navigate to="/verify-email" replace />;
+    }
+  }
   
   // Form state
   const [name, setName] = useState('');
@@ -103,12 +112,30 @@ export const Register = () => {
     }
   };
 
-  const handleGoogleSignup = () => {
+  const handleGoogleSignup = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      await loginWithGoogle();
+      setSuccessMsg('Signed in with Google successfully! Redirecting...');
+    } catch (err: any) {
+      console.error(err);
+      
+      // Firebase auth error code mappings
+      if (err.code === 'auth/popup-closed-by-user') {
+        setErrorMsg('The sign-in popup was closed before completing. Please try again.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setErrorMsg('Network connectivity issue detected. Please check your internet connection.');
+      } else if (err.code === 'auth/account-exists-with-different-credential') {
+        setErrorMsg('An account already exists with the same email using a different login method.');
+      } else {
+        setErrorMsg(err.message || 'Failed to sign in with Google.');
+      }
+    } finally {
       setLoading(false);
-      setSuccessMsg('Google Sign Up triggered successfully! (UI Mock)');
-    }, 1200);
+    }
   };
 
   return (
@@ -272,7 +299,7 @@ export const Register = () => {
             variant="outline"
             className="w-full border-slate-800 hover:bg-slate-800/50 text-slate-300 flex items-center justify-center gap-2"
             onClick={handleGoogleSignup}
-            disabled={loading}
+            isLoading={loading}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>

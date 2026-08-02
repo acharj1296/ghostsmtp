@@ -15,6 +15,7 @@ import { Settings } from './pages/Settings';
 import { Profile } from './pages/Profile';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { Landing } from './pages/Landing';
 import { Loading } from './pages/Loading';
 import { NotFound } from './pages/NotFound';
 
@@ -45,12 +46,12 @@ export const App = () => {
             <Router>
               <Routes>
                 {/* Public Gateways */}
+                <Route path="/" element={<Landing />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
 
                 {/* Protected Workspace Views */}
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
                   <Route path="/domains" element={<DashboardLayout><Domains /></DashboardLayout>} />
                   <Route path="/smtp" element={<DashboardLayout><SmtpCredentials /></DashboardLayout>} />

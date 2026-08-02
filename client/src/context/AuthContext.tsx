@@ -1,5 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged, 
+  createUserWithEmailAndPassword,
+  updateProfile,
+  sendEmailVerification,
+  User as FirebaseUser 
+} from 'firebase/auth';
 import { auth } from '../api/firebase';
 
 interface User {
@@ -13,6 +21,7 @@ interface AuthContextType {
   loading: boolean;
   isAuthenticated: boolean;
   login: (email?: string, password?: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -98,6 +107,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const register = async (email: string, password: string, displayName: string) => {
+    setLoading(true);
+    const isMock = !import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY === 'mock-api-key';
+
+    try {
+      if (isMock) {
+        // Local developer mock registration bypass
+        localStorage.setItem('token', 'mock-developer-token');
+        localStorage.setItem('userEmail', email);
+        setUser({
+          uid: 'mock-firebase-uid',
+          email: email,
+          displayName: displayName,
+        });
+      } else {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName });
+        await sendEmailVerification(userCredential.user);
+        
+        setUser({
+          uid: userCredential.user.uid,
+          email: userCredential.user.email || '',
+          displayName: displayName,
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = async () => {
     setLoading(true);
     const isMock = !import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY === 'mock-api-key';
@@ -115,7 +154,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

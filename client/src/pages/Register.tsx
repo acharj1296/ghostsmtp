@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -8,6 +9,7 @@ import { Server, Eye, EyeOff, Check, X } from 'lucide-react';
 
 export const Register = () => {
   const navigate = useNavigate();
+  const { register } = useAuth();
   
   // Form state
   const [name, setName] = useState('');
@@ -58,7 +60,7 @@ export const Register = () => {
     }
   }, [strengthScore]);
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -79,10 +81,10 @@ export const Register = () => {
 
     setLoading(true);
     
-    // Simulate UI registering state
-    setTimeout(() => {
-      setLoading(false);
-      setSuccessMsg('Account created successfully! Redirecting to sign in...');
+    try {
+      await register(email, password, name);
+      setSuccessMsg('Account created successfully! Redirecting to email verification...');
+      
       // Clear fields on success
       setName('');
       setEmail('');
@@ -91,9 +93,14 @@ export const Register = () => {
       setAgreeTerms(false);
       
       setTimeout(() => {
-        navigate('/login');
-      }, 1500);
-    }, 1500);
+        navigate('/verify-email');
+      }, 2000);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Failed to create account. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleSignup = () => {

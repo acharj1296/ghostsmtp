@@ -10,6 +10,7 @@ const controller = new EmailController();
 router.post('/send', authenticateApiKey, controller.send);
 
 // Dashboard route actions require Firebase user token checks
+router.post('/composer-send', authenticateUser, controller.sendComposer);
 router.get('/', authenticateUser, controller.list);
 router.get('/stats', authenticateUser, controller.getStats);
 router.get('/:messageId/events', authenticateUser, controller.getEvents);

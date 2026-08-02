@@ -11,6 +11,7 @@ import internalRouter from './routes/internal.routes';
 import emailRouter from './routes/email.routes';
 import webhookRouter from './routes/webhook.routes';
 import profileRouter from './routes/profile.routes';
+import templateRouter from './routes/template.routes';
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/v1/internal', internalRouter);
 app.use('/api/v1/emails', emailRouter);
 app.use('/api/v1/webhooks', webhookRouter);
 app.use('/api/v1/profile', profileRouter);
+app.use('/api/v1/templates', templateRouter);
 app.use(errorHandler);
 
 // Health Check Endpoint (Includes MongoDB status check)

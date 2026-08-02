@@ -13,6 +13,7 @@ import { Templates } from './pages/Templates';
 import { Webhooks } from './pages/Webhooks';
 import { Settings } from './pages/Settings';
 import { Profile } from './pages/Profile';
+import { EmailComposer } from './pages/EmailComposer';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Landing } from './pages/Landing';
@@ -96,6 +97,7 @@ export const App = () => {
                 {/* Protected Workspace Views */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
+                  <Route path="/send-email" element={<DashboardLayout><EmailComposer /></DashboardLayout>} />
                   <Route path="/domains" element={<DashboardLayout><Domains /></DashboardLayout>} />
                   <Route path="/smtp" element={<DashboardLayout><SmtpCredentials /></DashboardLayout>} />
                   <Route path="/api-keys" element={<DashboardLayout><ApiKeys /></DashboardLayout>} />

@@ -21,6 +21,20 @@ export class EmailController {
     }
   }
 
+  async sendComposer(req: Request, res: Response) {
+    const workspaceId = req.workspaceId;
+    if (!workspaceId) {
+      return res.status(400).json({ error: 'Missing active workspace identification.' });
+    }
+
+    try {
+      const result = await emailSendService.sendComposerEmail(workspaceId, req.body);
+      return res.status(200).json(result);
+    } catch (error: any) {
+      return res.status(400).json({ error: error.message });
+    }
+  }
+
   async list(req: Request, res: Response) {
     const workspaceId = req.workspaceId;
     if (!workspaceId) {

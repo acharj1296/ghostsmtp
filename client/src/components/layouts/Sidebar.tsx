@@ -11,7 +11,8 @@ import {
   Sun,
   Moon,
   LogOut,
-  Server
+  Server,
+  Send
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -28,6 +29,7 @@ export const Sidebar = ({ onCloseMobile }: SidebarProps) => {
 
   const navigation = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'Email Composer', path: '/send-email', icon: Send },
     { name: 'Domains', path: '/domains', icon: Globe },
     { name: 'SMTP Credentials', path: '/smtp', icon: Key },
     { name: 'API Keys', path: '/api-keys', icon: Key },

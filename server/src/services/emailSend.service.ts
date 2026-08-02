@@ -114,5 +114,105 @@ export class EmailSendService {
       logId: emailLog.id,
     };
   }
+
+  async sendComposerEmail(workspaceId: string, inputPayload: any) {
+    const { 
+      credentialId, 
+      domainId, 
+      fromName, 
+      fromEmail, 
+      to, 
+      cc = [], 
+      bcc = [], 
+      subject, 
+      replyTo, 
+      priority = 'normal', 
+      text, 
+      html, 
+      attachments = [],
+      templateId
+    } = inputPayload;
+
+    if (!to || (Array.isArray(to) && to.length === 0)) {
+      throw new Error('At least one recipient email address is required.');
+    }
+    if (!subject || subject.trim() === '') {
+      throw new Error('Email subject line cannot be empty.');
+    }
+    if (!fromEmail) {
+      throw new Error('From email address is required.');
+    }
+
+    const senderDomain = fromEmail.split('@')[1];
+    if (!senderDomain) {
+      throw new Error('Invalid sender email address format.');
+    }
+
+    // 1. Domain verification check
+    const domainObj = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
+    if (!domainObj) {
+      throw new Error(`Domain with ID ${domainId} not found in this workspace.`);
+    }
+
+    if (domainObj.status !== 'verified') {
+      throw new Error(`Domain "${domainObj.name}" is not verified. SPF, DKIM, and DMARC verification are required before sending.`);
+    }
+
+    // 2. Generate unique message ID
+    const messageId = `<${crypto.randomUUID()}@${senderDomain}>`;
+
+    const toArray = Array.isArray(to) ? to : [to];
+    const ccArray = Array.isArray(cc) ? cc : (cc ? [cc] : []);
+    const bccArray = Array.isArray(bcc) ? bcc : (bcc ? [bcc] : []);
+
+    const fromFormatted = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+
+    // 3. Log email in DB
+    const primaryRecipient = toArray[0];
+    const emailLog = await this.emailLogRepo.create({
+      workspaceId: workspaceId as any,
+      domainId: domainObj.id,
+      sender: fromFormatted,
+      recipient: primaryRecipient,
+      subject,
+      status: 'queued',
+      retryCount: 0,
+      messageId,
+      deliveryMetadata: {
+        allTo: toArray,
+        cc: ccArray,
+        bcc: bccArray,
+        priority,
+        templateId,
+        credentialId,
+        attachmentsCount: attachments.length,
+      },
+    } as any);
+
+    // 4. Add to Queue
+    await this.queueService.addEmailJob(workspaceId, {
+      to: toArray,
+      from: fromFormatted,
+      subject,
+      text,
+      html,
+      cc: ccArray,
+      bcc: bccArray,
+      replyTo,
+      attachments,
+      headers: {
+        'X-Priority': priority === 'high' ? '1' : priority === 'low' ? '5' : '3',
+        'X-GhostSMTP-Credential': credentialId || 'default',
+      },
+      messageId,
+    } as any);
+
+    return {
+      success: true,
+      messageId,
+      status: 'queued',
+      logId: emailLog.id,
+    };
+  }
 }
 export default EmailSendService;

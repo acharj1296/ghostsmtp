@@ -30,7 +30,8 @@ export const SmtpCredentials = () => {
   const { data: credentials = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['credentials'],
     queryFn: async () => {
-      const res = await apiClient.get('/credentials');
+      const res = await apiClient.get('/credentials/smtp');
+      console.log(JSON.stringify(res.data, null, 2));
       return res.data;
     },
   });
@@ -38,15 +39,27 @@ export const SmtpCredentials = () => {
   // Mutations
   const createMutation = useMutation({
     mutationFn: async (desc: string) => {
-      const res = await apiClient.post('/credentials', { description: desc });
+      const res = await apiClient.post('/credentials/smtp', { description: desc });
       return res.data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['credentials'] });
+
       setIsCreateOpen(false);
       setDescription('');
-      setShowCredentialInfo(data); // Displays generated username and password in secondary dialog
-      showNotification('Success', 'SMTP credential created successfully.', 'success');
+
+      setShowCredentialInfo({
+        username: data.credential.username,
+        password: data.plaintextPassword,
+        description: data.credential.description,
+        isRegen: false,
+      });
+
+      showNotification(
+        'Success',
+        'SMTP credential created successfully.',
+        'success'
+      );
     },
     onError: (err: any) => {
       showNotification('Error', err.response?.data?.error || 'Failed to create SMTP key.', 'error');
@@ -55,7 +68,7 @@ export const SmtpCredentials = () => {
 
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'active' | 'disabled' }) => {
-      await apiClient.patch(`/credentials/${id}/status`, { status });
+      await apiClient.patch(`/credentials/smtp/${id}/status`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credentials'] });
@@ -68,7 +81,7 @@ export const SmtpCredentials = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiClient.delete(`/credentials/${id}`);
+      await apiClient.delete(`/credentials/smtp/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credentials'] });
@@ -81,15 +94,15 @@ export const SmtpCredentials = () => {
 
   const regenerateMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await apiClient.post(`/credentials/${id}/regenerate`);
+      const res = await apiClient.post(`/credentials/smtp/${id}/regenerate`);
       return res.data;
     },
     onSuccess: (data, id) => {
       // Find original description
-      const orig = credentials.find((c: any) => c._id === id);
+      const orig = credentials.find((c: any) => c.id === id);
       setShowCredentialInfo({
         username: orig?.username || 'Username',
-        password: data.password,
+        password: data.plaintextPassword,
         description: orig?.description || 'Regenerated Key',
         isRegen: true,
       });
@@ -174,7 +187,7 @@ export const SmtpCredentials = () => {
               </TableHeader>
               <TableBody>
                 {credentials.map((c: any) => (
-                  <TableRow key={c._id}>
+                  <TableRow key={c.id}>
                     <TableCell className="font-semibold text-slate-900 dark:text-white">{c.description}</TableCell>
                     <TableCell className="font-mono text-xs">{c.username}</TableCell>
                     <TableCell>
@@ -189,7 +202,7 @@ export const SmtpCredentials = () => {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => toggleStatusMutation.mutate({ id: c._id, status: c.status === 'active' ? 'disabled' : 'active' })}
+                        onClick={() => toggleStatusMutation.mutate({ id: c.id, status: c.status === 'active' ? 'disabled' : 'active' })}
                         className="flex items-center gap-1 text-slate-600 dark:text-slate-300"
                       >
                         {c.status === 'active' ? (
@@ -207,7 +220,7 @@ export const SmtpCredentials = () => {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => regenerateMutation.mutate(c._id)}
+                        onClick={() => regenerateMutation.mutate(c.id)}
                         className="flex items-center gap-1 text-slate-600 dark:text-slate-300"
                       >
                         <RefreshCw className="w-4 h-4 text-brand-500" />
@@ -216,7 +229,7 @@ export const SmtpCredentials = () => {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => deleteMutation.mutate(c._id)}
+                        onClick={() => deleteMutation.mutate(c.id)}
                         className="flex items-center gap-1 text-rose-500 hover:text-rose-600"
                       >
                         <Trash2 className="w-4 h-4" />

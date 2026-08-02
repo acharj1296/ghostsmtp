@@ -44,11 +44,21 @@ export const ApiKeys = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['apikeys'] });
+
       setIsCreateOpen(false);
       setKeyName('');
       setScopes(['send']);
-      setShowSecretInfo(data); // Display generated token rawSecret
-      showNotification('Success', 'API Key created successfully.', 'success');
+
+      setShowSecretInfo({
+        rawKey: data.rawKey,
+        apiKey: data.apiKey,
+      });
+
+      showNotification(
+        'Success',
+        'API Key created successfully.',
+        'success'
+      );
     },
     onError: (err: any) => {
       showNotification('Error', err.response?.data?.error || 'Failed to create API key.', 'error');
@@ -150,7 +160,7 @@ export const ApiKeys = () => {
               </TableHeader>
               <TableBody>
                 {apiKeys.map((key: any) => (
-                  <TableRow key={key._id}>
+                  <TableRow key={key.id ?? key._id}>
                     <TableCell className="font-semibold text-slate-900 dark:text-white">{key.name}</TableCell>
                     <TableCell>
                       <div className="flex gap-1.5 flex-wrap">
@@ -175,7 +185,7 @@ export const ApiKeys = () => {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => toggleStatusMutation.mutate({ id: key._id, status: key.status === 'active' ? 'disabled' : 'active' })}
+                            onClick={() => toggleStatusMutation.mutate({ id: key.id ?? key._id, status: key.status === 'active' ? 'disabled' : 'active' })}
                             className="flex items-center gap-1 text-slate-600 dark:text-slate-300"
                           >
                             {key.status === 'active' ? (
@@ -193,7 +203,7 @@ export const ApiKeys = () => {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => toggleStatusMutation.mutate({ id: key._id, status: 'revoked' })}
+                            onClick={() => toggleStatusMutation.mutate({ id: key.id ?? key._id, status: 'revoked' })}
                             className="flex items-center gap-1 text-rose-500 hover:text-rose-600"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -267,8 +277,8 @@ export const ApiKeys = () => {
           <div>
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">REST Bearer Secret Token</span>
             <div className="flex items-center gap-2 mt-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs font-mono break-all justify-between">
-              <span>{showSecretInfo?.token}</span>
-              <Button variant="ghost" size="sm" onClick={() => handleCopy(showSecretInfo?.token)} className="p-1">
+              <span>{showSecretInfo?.rawKey}</span>
+              <Button variant="ghost" size="sm" onClick={() => handleCopy(showSecretInfo?.rawKey)} className="p-1">
                 {copiedKey === 'secret' ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-slate-400" />}
               </Button>
             </div>

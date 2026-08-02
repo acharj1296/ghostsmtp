@@ -1,0 +1,111 @@
+GhostSMTP/
+│
+├── 📄 Documentation
+│   ├── API.md
+│   ├── ARCHITECTURE.md
+│   ├── DATABASE.md
+│   ├── DEPLOYMENT.md
+│   ├── ROADMAP.md
+│   ├── SECURITY.md
+│   └── README.md
+│
+├── ⚙️ Configuration
+│   ├── .gitignore
+│   ├── docker-compose.yml
+│   └── .vscode/
+│       └── settings.json
+│
+├── 🎨 Frontend (React + Vite)
+│   ├── .env
+│   ├── .env.example
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   ├── index.html
+│   │
+│   └── src/
+│       ├── api/
+│       │   ├── client.ts
+│       │   └── firebase.ts
+│       │
+│       ├── components/
+│       │   ├── layouts/
+│       │   │   ├── DashboardLayout.tsx
+│       │   │   ├── LoginLayout.tsx
+│       │   │   ├── Sidebar.tsx
+│       │   │   └── TopNav.tsx
+│       │   │
+│       │   └── ui/
+│       │       ├── badge.tsx
+│       │       ├── button.tsx
+│       │       ├── card.tsx
+│       │       ├── dialog.tsx
+│       │       ├── input.tsx
+│       │       ├── notification.tsx
+│       │       └── table.tsx
+│       │
+│       ├── context/
+│       │   ├── AuthContext.tsx
+│       │   ├── ThemeContext.tsx
+│       │   └── WorkspaceContext.tsx
+│       │
+│       ├── pages/
+│       │   ├── Dashboard.tsx
+│       │   ├── Domains.tsx
+│       │   ├── SmtpCredentials.tsx
+│       │   ├── ApiKeys.tsx
+│       │   ├── EmailLogs.tsx
+│       │   ├── Templates.tsx
+│       │   ├── Webhooks.tsx
+│       │   ├── Profile.tsx
+│       │   ├── Settings.tsx
+│       │   ├── Login.tsx
+│       │   ├── Loading.tsx
+│       │   └── NotFound.tsx
+│       │
+│       ├── App.tsx
+│       ├── main.tsx
+│       └── index.css
+│
+├── 🚀 Backend (Node.js + Express)
+│   ├── .env
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── tsconfig.json
+│   │
+│   └── src/
+│       ├── config/
+│       ├── controllers/
+│       ├── middleware/
+│       ├── models/
+│       ├── repositories/
+│       ├── routes/
+│       ├── services/
+│       ├── tests/
+│       ├── db/
+│       └── index.ts
+│
+├── 🐳 Docker Infrastructure
+│   ├── nginx/
+│   ├── mail/
+│   │   ├── postfix/
+│   │   ├── dovecot/
+│   │   ├── opendkim/
+│   │   ├── opendmarc/
+│   │   └── rspamd/
+│   ├── postgres/
+│   ├── redis/
+│   └── scripts/
+│
+└── 📊 Project Statistics
+    ├── Total Folders : 34
+    ├── Total Files   : 163
+    ├── Frontend      : React + Vite + TypeScript
+    ├── Backend       : Node.js + Express + TypeScript
+    ├── Database      : MongoDB
+    ├── Cache         : Redis
+    ├── Mail Stack    : Postfix + Dovecot + OpenDKIM + OpenDMARC + Rspamd
+    └── Containerized : Docker Compose

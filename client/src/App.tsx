@@ -16,6 +16,8 @@ import { Profile } from './pages/Profile';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Landing } from './pages/Landing';
+import { VerifyEmail } from './pages/VerifyEmail';
+import { ForgotPassword } from './pages/ForgotPassword';
 import { Loading } from './pages/Loading';
 import { NotFound } from './pages/NotFound';
 
@@ -28,13 +30,46 @@ const queryClient = new QueryClient({
   },
 });
 
-// Guard component verifying token authenticity
-const ProtectedRoute = () => {
-  const { isAuthenticated, loading } = useAuth();
+// Guest route wrapper (unauthenticated only)
+const GuestRoute = () => {
+  const { isAuthenticated, user, loading } = useAuth();
   if (loading) {
     return <Loading />;
   }
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  if (isAuthenticated && user) {
+    return user.emailVerified ? <Navigate to="/dashboard" replace /> : <Navigate to="/verify-email" replace />;
+  }
+  return <Outlet />;
+};
+
+// Email verification route wrapper (authenticated & unverified only)
+const VerifyRoute = () => {
+  const { isAuthenticated, user, loading } = useAuth();
+  if (loading) {
+    return <Loading />;
+  }
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (user.emailVerified) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <Outlet />;
+};
+
+// Guard component verifying token authenticity and verification status
+const ProtectedRoute = () => {
+  const { isAuthenticated, user, loading } = useAuth();
+  if (loading) {
+    return <Loading />;
+  }
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!user.emailVerified) {
+    return <Navigate to="/verify-email" replace />;
+  }
+  return <Outlet />;
 };
 
 export const App = () => {
@@ -45,10 +80,18 @@ export const App = () => {
           <WorkspaceProvider>
             <Router>
               <Routes>
-                {/* Public Gateways */}
-                <Route path="/" element={<Landing />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+                {/* Guest Gateways */}
+                <Route element={<GuestRoute />}>
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                </Route>
+
+                {/* Email Verification Gateway */}
+                <Route element={<VerifyRoute />}>
+                  <Route path="/verify-email" element={<VerifyEmail />} />
+                </Route>
 
                 {/* Protected Workspace Views */}
                 <Route element={<ProtectedRoute />}>

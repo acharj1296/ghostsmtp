@@ -8,6 +8,7 @@ import {
   sendEmailVerification,
   signInWithPopup,
   GoogleAuthProvider,
+  sendPasswordResetEmail,
   User as FirebaseUser 
 } from 'firebase/auth';
 import { auth } from '../api/firebase';
@@ -26,6 +27,7 @@ interface AuthContextType {
   login: (email?: string, password?: string) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -179,6 +181,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const sendPasswordReset = async (email: string) => {
+    setLoading(true);
+    const isMock = !import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY === 'mock-api-key';
+
+    try {
+      if (isMock) {
+        console.log(`[Mock Auth] Password reset email sent to: ${email}`);
+      } else {
+        await sendPasswordResetEmail(auth, email);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = async () => {
     setLoading(true);
     const isMock = !import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY === 'mock-api-key';
@@ -189,6 +206,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       localStorage.removeItem('token');
       localStorage.removeItem('userEmail');
+      localStorage.removeItem('activeWorkspaceId');
       setUser(null);
     } finally {
       setLoading(false);
@@ -196,7 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, register, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, register, loginWithGoogle, sendPasswordReset, logout }}>
       {children}
     </AuthContext.Provider>
   );

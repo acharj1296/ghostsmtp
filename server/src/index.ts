@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env';
 import { connectDatabase, getDbStatus } from './db/mongoose';
+import { rateLimiter } from './middleware/rateLimit.middleware';
+import { errorHandler } from './middleware/errorHandler.middleware';
 import domainRouter from './routes/domain.routes';
 import credentialRouter from './routes/credential.routes';
 import internalRouter from './routes/internal.routes';
@@ -14,10 +16,24 @@ const app = express();
 
 // Apply global middlewares
 app.use(helmet());
+
+// Secure CORS configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
+
+app.use(rateLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -28,6 +44,7 @@ app.use('/api/v1/internal', internalRouter);
 app.use('/api/v1/emails', emailRouter);
 app.use('/api/v1/webhooks', webhookRouter);
 app.use('/api/v1/profile', profileRouter);
+app.use(errorHandler);
 
 // Health Check Endpoint (Includes MongoDB status check)
 app.get('/api/v1/health', (req, res) => {

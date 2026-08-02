@@ -14,6 +14,7 @@ import { Webhooks } from './pages/Webhooks';
 import { Settings } from './pages/Settings';
 import { Profile } from './pages/Profile';
 import { Login } from './pages/Login';
+import { Register } from './pages/Register';
 import { Loading } from './pages/Loading';
 import { NotFound } from './pages/NotFound';
 
@@ -45,6 +46,7 @@ export const App = () => {
               <Routes>
                 {/* Public Gateways */}
                 <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
 
                 {/* Protected Workspace Views */}
                 <Route element={<ProtectedRoute />}>

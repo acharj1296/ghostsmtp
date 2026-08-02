@@ -1,21 +1,28 @@
-# Dependency directories
+# =========================
+# Dependencies
+# =========================
 node_modules/
 **/node_modules/
 
-# Build outputs
+# =========================
+# Build Outputs
+# =========================
 dist/
 **/dist/
 build/
+.next/
+out/
 
-# Local env files
+# =========================
+# Environment Files
+# =========================
 .env
 .env.*
 !.env.example
 
-# Testing and coverage
-coverage/
-
+# =========================
 # Logs
+# =========================
 logs/
 *.log
 npm-debug.log*
@@ -24,15 +31,59 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Database & Docker local data
+# =========================
+# Testing & Coverage
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Cache
+# =========================
+.cache/
+.parcel-cache/
+.eslintcache
+*.tsbuildinfo
+
+# =========================
+# Database & Docker Local Data
+# =========================
 postgres_data/
 redis_data/
+docker/postgres_data/
+docker/redis_data/
 
-# OS files
+# Docker override files
+docker-compose.override.yml
+
+# =========================
+# Firebase / Secrets
+# =========================
+firebase-adminsdk*.json
+serviceAccount*.json
+*.pem
+*.key
+*.crt
+*.p12
+
+# =========================
+# Uploads / Storage
+# =========================
+uploads/
+storage/
+tmp/
+temp/
+
+# =========================
+# OS Files
+# =========================
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDEs / Editors
+# =========================
+# IDE / Editors
+# =========================
 .vscode/*
 !.vscode/extensions.json
 .idea/
@@ -41,13 +92,36 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+.history/
+
+# =========================
+# Git Patch Files
+# =========================
 *.patch
 *.diff
 
-# Firebase/Service Accounts secrets
-firebase-adminsdk*.json
-serviceAccount*.json
+# =========================
+# Misc
+# =========================
+*.pid
+*.seed
+*.pid.lock
 
-# Temp directories
-tmp/
-temp/
+# =========================
+# Package Managers
+# =========================
+.pnpm-store/
+.yarn/
+.yarn/cache/
+.yarn/unplugged/
+
+# =========================
+# Mac/Linux
+# =========================
+.AppleDouble
+.LSOverride
+
+# =========================
+# Windows
+# =========================
+ehthumbs.db

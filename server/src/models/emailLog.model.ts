@@ -11,6 +11,9 @@ export interface IEmailLog extends Document {
   messageId: string; // Unique SMTP Message ID
   smtpResponse?: string;
   errorReason?: string;
+  errorStack?: string;
+  processingTimeMs?: number;
+  workerId?: string;
   deliveryMetadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +37,9 @@ const EmailLogSchema = new Schema<IEmailLog>(
     messageId: { type: String, required: true, unique: true, index: true },
     smtpResponse: { type: String },
     errorReason: { type: String },
+    errorStack: { type: String },
+    processingTimeMs: { type: Number },
+    workerId: { type: String },
     deliveryMetadata: { type: Schema.Types.Map, of: Schema.Types.Mixed },
   },
   {

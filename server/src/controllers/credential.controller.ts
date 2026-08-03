@@ -5,6 +5,13 @@ import { CredentialService } from '../services/credential.service';
 const credentialService = new CredentialService();
 
 const createSmtpSchema = z.object({
+  // If creating an external SMTP credential provide host/port/secure/smtpUsername/password
+  host: z.string().optional(),
+  port: z.number().optional(),
+  secure: z.boolean().optional(),
+  smtpUsername: z.string().optional(),
+  password: z.string().optional(),
+  authenticationType: z.enum(['plain','login','oauth']).optional(),
   description: z.string().optional(),
 });
 
@@ -36,7 +43,7 @@ export class CredentialController {
         return res.status(400).json({ error: parsed.error.errors[0].message });
       }
 
-      const result = await credentialService.createSmtpCredential(workspaceId, parsed.data.description);
+      const result = await credentialService.createSmtpCredential(workspaceId, parsed.data);
       return res.status(201).json(result);
     } catch (error: any) {
       return res.status(500).json({ error: error.message });

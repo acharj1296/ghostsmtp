@@ -1,8 +1,8 @@
 # --- GhostSMTP Postfix main.cf Configuration ---
 
 # System Parameters
-myhostname = mail.ghostsmtp.com
-myorigin = $myhostname
+myhostname = mail.ghosthosting.qzz.io
+myorigin = $mydomain
 mydestination = localhost, localhost.localdomain
 relayhost =
 
@@ -14,16 +14,18 @@ message_size_limit = 26214400
 mailbox_size_limit = 0
 recipient_delimiter = +
 
-# Local network settings
-mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+# Local network settings — include Docker bridge ranges so host-side API can relay
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 172.16.0.0/12 192.168.0.0/16 10.0.0.0/8
 
 # Virtual Mailbox Settings (MongoDB Backend Prep)
-virtual_mailbox_domains = mongodb:/etc/postfix/mongodb-domains.cf
-virtual_mailbox_maps = mongodb:/etc/postfix/mongodb-users.cf
-virtual_alias_maps = mongodb:/etc/postfix/mongodb-aliases.cf
+# Disabled until postfix-mongodb is installed in the image — broken maps cause
+# "451 Temporary lookup failure" on RCPT TO for all recipients.
+# virtual_mailbox_domains = mongodb:/etc/postfix/mongodb-domains.cf
+# virtual_mailbox_maps = mongodb:/etc/postfix/mongodb-users.cf
+# virtual_alias_maps = mongodb:/etc/postfix/mongodb-aliases.cf
 
 # LMTP Delivery to Dovecot (Port 24)
-virtual_transport = lmtp:inet:dovecot:24
+# virtual_transport = lmtp:inet:dovecot:24
 
 # --- SASL Authentication (Dovecot Integration Prep) ---
 smtpd_sasl_auth_enable = yes
@@ -52,12 +54,16 @@ milter_default_action = accept
 milter_protocol = 6
 
 # --- SMTP Access Control and Restrictions ---
-smtpd_recipient_restrictions =
-    permit_mynetworks,
-    permit_sasl_authenticated,
-    defer_unauth_destination
+# Evaluate relay rules before recipient rules so trusted clients (API worker on
+# Docker bridge / localhost) can relay without virtual-map lookups.
+smtpd_relay_before_recipient_restrictions = yes
 
 smtpd_relay_restrictions =
     permit_mynetworks,
     permit_sasl_authenticated,
     defer_unauth_destination
+
+smtpd_recipient_restrictions =
+    permit_mynetworks,
+    permit_sasl_authenticated,
+    reject_unauth_destination

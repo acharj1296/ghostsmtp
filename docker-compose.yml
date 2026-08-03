@@ -149,17 +149,26 @@ services:
     build: ./docker/mail/postfix
     container_name: ghostsmtp-postfix
     restart: unless-stopped
+
+    environment:
+      MAIL_HOSTNAME: mail.ghosthosting.qzz.io
+      MAIL_DOMAIN: ghosthosting.qzz.io
+
     ports:
-      - "25:25"   # SMTP
-      - "587:587" # SMTP Submission
+      - "25:25"
+      - "587:587"
+
     volumes:
       - postfix_spool:/var/spool/postfix
+
     networks:
       - mail-network
       - db-network
+
     depends_on:
       dovecot:
         condition: service_healthy
+
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 25 || exit 1"]
       interval: 15s

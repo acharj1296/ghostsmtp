@@ -1,6 +1,6 @@
 # Postfix MongoDB Users Lookup Map
 hosts = db:27017
-dbname = test
+dbname = ghostsmtp
 username = admin
 password = admin_password
 collection = smtpcredentials

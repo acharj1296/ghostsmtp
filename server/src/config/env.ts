@@ -17,6 +17,10 @@ const envSchema = z.object({
   FIREBASE_CLIENT_ID: z.string().optional(),
   FIREBASE_CLIENT_X509_CERT_URL: z.string().optional(),
   FIREBASE_DATABASE_URL: z.string().optional(),
+  // ENCRYPTION_KEY is used to encrypt SMTP upstream passwords before persisting them.
+  // Provide a strong secret in production. When not provided the server will still start
+  // but any attempt to create or decrypt SMTP passwords will throw a clear error.
+  ENCRYPTION_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

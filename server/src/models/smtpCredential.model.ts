@@ -2,8 +2,19 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export interface ISmtpCredential extends Document {
   workspaceId: Types.ObjectId;
-  username: string;
-  passwordHash: string;
+
+  // Legacy/local SMTP relay fields (used for authenticating to local Postfix)
+  username?: string;
+  passwordHash?: string;
+
+  // External SMTP server configuration (for outbound relaying per-credential)
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  smtpUsername?: string; // username to use when authenticating to upstream SMTP
+  encryptedPassword?: string; // AES-encrypted password for upstream SMTP
+  authenticationType?: 'plain' | 'login' | 'oauth';
+
   description?: string;
   status: 'active' | 'disabled';
   lastUsedAt?: Date;
@@ -16,8 +27,19 @@ export interface ISmtpCredential extends Document {
 const SmtpCredentialSchema = new Schema<ISmtpCredential>(
   {
     workspaceId: { type: Schema.Types.ObjectId, ref: 'Workspace', required: true, index: true },
-    username: { type: String, required: true, unique: true, index: true },
-    passwordHash: { type: String, required: true },
+
+    // Legacy/local fields (keep for existing SMTP auth flow)
+    username: { type: String, unique: true, index: true },
+    passwordHash: { type: String },
+
+    // External SMTP configuration
+    host: { type: String, trim: true },
+    port: { type: Number },
+    secure: { type: Boolean, default: false },
+    smtpUsername: { type: String, trim: true },
+    encryptedPassword: { type: String },
+    authenticationType: { type: String, enum: ['plain', 'login', 'oauth'], default: 'plain' },
+
     description: { type: String, trim: true },
     status: { type: String, required: true, default: 'active', enum: ['active', 'disabled'], index: true },
     lastUsedAt: { type: Date },

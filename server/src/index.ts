@@ -12,6 +12,7 @@ import emailRouter from './routes/email.routes';
 import webhookRouter from './routes/webhook.routes';
 import profileRouter from './routes/profile.routes';
 import templateRouter from './routes/template.routes';
+import { getQueueService } from './services/queue.service';
 
 const app = express();
 
@@ -73,6 +74,9 @@ const startServer = async () => {
   try {
     // Establish DB Connection
     await connectDatabase();
+
+    // Start BullMQ worker after MongoDB is ready
+    getQueueService().startWorker();
 
     const server = app.listen(env.PORT, () => {
       console.log(`[GhostSMTP API] Server is running on port ${env.PORT} in ${env.NODE_ENV} mode.`);

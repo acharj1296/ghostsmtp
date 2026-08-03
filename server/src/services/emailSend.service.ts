@@ -3,7 +3,8 @@ import crypto from 'crypto';
 import { DomainRepository } from '../repositories/domain.repository';
 import { EmailLogRepository } from '../repositories/emailLog.repository';
 import { SuppressionRepository } from '../repositories/suppression.repository';
-import { QueueService } from './queue.service';
+import { QueueService, getQueueService } from './queue.service';
+import { SmtpCredentialRepository } from '../repositories/smtpCredential.repository';
 
 const emailAddressSchema = z.string().email();
 
@@ -26,7 +27,33 @@ const sendEmailSchema = z.object({
 export class EmailSendService {
   private domainRepo = new DomainRepository();
   private emailLogRepo = new EmailLogRepository();
-  private queueService = new QueueService();
+  private smtpRepo = new SmtpCredentialRepository();
+  private queueService = getQueueService();
+
+  private async validateCredential(workspaceId: string, credentialId?: string) {
+    if (!credentialId) {
+      throw new Error('SMTP credential is required. Select an active credential in the Email Composer.');
+    }
+
+    const cred = await this.smtpRepo.findById(credentialId);
+    if (!cred || cred.workspaceId.toString() !== workspaceId) {
+      throw new Error('SMTP credential not found in this workspace.');
+    }
+    if (cred.status !== 'active') {
+      throw new Error('SMTP credential is disabled.');
+    }
+
+    const isExternal = !!(cred.host && cred.smtpUsername && cred.encryptedPassword);
+    const isLocalRelay = !!cred.username;
+
+    if (!isExternal && !isLocalRelay) {
+      throw new Error(
+        'Incomplete SMTP credential configuration. Recreate the credential with external SMTP settings (host, username, password) or as a local relay credential.'
+      );
+    }
+
+    return cred;
+  }
 
   async sendEmail(workspaceId: string, inputPayload: any) {
     // 1. Zod input validation
@@ -106,6 +133,8 @@ export class EmailSendService {
     await this.queueService.addEmailJob(workspaceId, {
       ...emailData,
       messageId,
+      // allow callers to pass credentialId to select outbound SMTP
+      credentialId: (inputPayload as any).credentialId || undefined,
     } as any);
 
     return {
@@ -158,6 +187,8 @@ export class EmailSendService {
       throw new Error(`Domain "${domainObj.name}" is not verified. SPF, DKIM, and DMARC verification are required before sending.`);
     }
 
+    await this.validateCredential(workspaceId, credentialId);
+
     // 2. Generate unique message ID
     const messageId = `<${crypto.randomUUID()}@${senderDomain}>`;
 
@@ -200,9 +231,10 @@ export class EmailSendService {
       bcc: bccArray,
       replyTo,
       attachments,
+      credentialId,
       headers: {
         'X-Priority': priority === 'high' ? '1' : priority === 'low' ? '5' : '3',
-        'X-GhostSMTP-Credential': credentialId || 'default',
+        ...(credentialId ? { 'X-GhostSMTP-Credential': credentialId } : {}),
       },
       messageId,
     } as any);

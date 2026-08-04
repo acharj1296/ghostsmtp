@@ -17,10 +17,19 @@ const envSchema = z.object({
   FIREBASE_CLIENT_ID: z.string().optional(),
   FIREBASE_CLIENT_X509_CERT_URL: z.string().optional(),
   FIREBASE_DATABASE_URL: z.string().optional(),
-  // ENCRYPTION_KEY is used to encrypt SMTP upstream passwords before persisting them.
-  // Provide a strong secret in production. When not provided the server will still start
-  // but any attempt to create or decrypt SMTP passwords will throw a clear error.
+  // ENCRYPTION_KEY is used to encrypt SMTP upstream passwords, webhook signing
+  // secrets and DKIM private keys before persisting them. REQUIRED in production:
+  // the server refuses to boot without it (fail closed).
   ENCRYPTION_KEY: z.string().optional(),
+  // Shared secret required on internal (cross-service) endpoints such as
+  // /api/v1/internal/smtp-auth. Used with a timing-safe header comparison.
+  INTERNAL_AUTH_TOKEN: z.string().default('dev-internal-token'),
+  // Number of trusted reverse-proxy hops for req.ip resolution. In the Docker
+  // deployment this is always 1 (nginx is the only fronting proxy).
+  TRUST_PROXY_HOPS: z.coerce.number().default(1),
+  // Rate limiting (Redis-backed fixed window).
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
+  RATE_LIMIT_IP_MAX: z.coerce.number().default(200),
 });
 
 const parsed = envSchema.safeParse(process.env);

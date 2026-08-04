@@ -83,7 +83,9 @@ export const Domains = () => {
       queryClient.invalidateQueries({ queryKey: ['domains'] });
       setIsCreateOpen(false);
       setNewDomainName('');
-      setSelectedDomainId(data.id || data._id); // Auto open details for the newly created domain
+      // POST /domains returns { domain, dkim, verification } — the new domain
+      // id lives on data.domain, not at the top level.
+      setSelectedDomainId(data.domain?._id || data.domain?.id || null); // Auto open details for the newly created domain
       showNotification('Success', 'Domain created successfully.', 'success');
     },
     onError: (err: any) => {

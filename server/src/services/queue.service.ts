@@ -28,6 +28,7 @@ function normalizeCredentialId(raw: unknown): string | null {
 
 export class QueueService {
   private queue: Queue;
+  private dlqQueue: Queue;
   private worker: Worker | null = null;
   private queueJobRepo = new QueueJobRepository();
   private emailLogRepo = new EmailLogRepository();
@@ -43,6 +44,17 @@ export class QueueService {
           delay: 5000,
         },
         removeOnComplete: false,
+        removeOnFail: false,
+      },
+    });
+
+    // Dead-letter queue: permanently failed send jobs are parked here so no
+    // payload is lost and operators can replay them later.
+    this.dlqQueue = new Queue('email-dlq', {
+      connection: queueRedisConnection,
+      defaultJobOptions: {
+        attempts: 1,
+        removeOnComplete: true,
         removeOnFail: false,
       },
     });
@@ -292,7 +304,7 @@ export class QueueService {
     this.worker.on('failed', async (job, err) => {
       if (!job) return;
 
-      const { messageId } = job.data;
+      const { messageId, workspaceId, credentialId, payload } = job.data;
       const classified = SmtpTransportService.classifySmtpError(err);
       const dbJob = await this.queueJobRepo.findByMessageId(messageId);
       const dbLog = await this.emailLogRepo.findByMessageId(messageId);
@@ -320,6 +332,17 @@ export class QueueService {
         dbLog.errorStack = err.stack;
         dbLog.status = attemptsMade >= maxAttempts ? 'failed' : 'queued';
         await dbLog.save();
+      }
+
+      // Park permanently failed jobs in the dead-letter queue for replay.
+      if (attemptsMade >= maxAttempts) {
+        await this.addToDlq({
+          workspaceId,
+          messageId,
+          credentialId,
+          payload,
+          errorInfo: classified,
+        });
       }
     });
 
@@ -375,6 +398,73 @@ export class QueueService {
     await dbJob.save();
 
     return dbJob;
+  }
+
+  /**
+   * Parks a permanently failed job in the dead-letter queue (idempotent).
+   */
+  private async addToDlq(data: {
+    workspaceId: string;
+    messageId: string;
+    credentialId: string | null;
+    payload: any;
+    errorInfo: string;
+  }) {
+    try {
+      await this.dlqQueue.add('dlq-entry', data, {
+        jobId: `dlq:${data.messageId}`,
+      });
+      console.error(`[QueueService] Job msg:${data.messageId} moved to DLQ (${data.errorInfo}).`);
+    } catch (error: any) {
+      console.error('[QueueService] Failed to move job to DLQ:', error.message);
+    }
+  }
+
+  /**
+   * Replays a parked DLQ entry back onto the main email queue. The persisted
+   * queue-job and email-log records are reset so the flow restarts cleanly.
+   */
+  async replayFromDlq(messageId: string) {
+    const dlqJob = await this.dlqQueue.getJob(`dlq:${messageId}`);
+    if (!dlqJob) {
+      throw new Error('No DLQ entry found for this message ID.');
+    }
+
+    const { workspaceId, credentialId, payload } = dlqJob.data as any;
+
+    const dbJob = await this.queueJobRepo.findByMessageId(messageId);
+    if (dbJob) {
+      dbJob.status = 'queued';
+      dbJob.retryCount = 0;
+      dbJob.errorInfo = undefined;
+      await dbJob.save();
+    }
+
+    const dbLog = await this.emailLogRepo.findByMessageId(messageId);
+    if (dbLog) {
+      dbLog.status = 'queued';
+      dbLog.errorReason = undefined;
+      dbLog.errorStack = undefined;
+      await dbLog.save();
+    }
+
+    // The original failed job may still exist (removeOnFail: false), which
+    // would conflict with re-adding the same jobId.
+    const failedJob = await this.queue.getJob(messageId);
+    if (failedJob) {
+      await failedJob.remove();
+    }
+
+    await this.queue.add(
+      'send-email',
+      { workspaceId, messageId, credentialId, payload },
+      { jobId: messageId }
+    );
+
+    await dlqJob.remove();
+    console.log(`[QueueService] Job msg:${messageId} replayed from DLQ.`);
+
+    return { success: true, messageId };
   }
 }
 

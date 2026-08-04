@@ -31,13 +31,14 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
       // Verify Firebase ID Token
       decodedToken = await auth.verifyIdToken(idToken);
     } else {
-      // If Firebase Admin failed to initialize (e.g. mock mode in local test/dev)
-      // Allow fallback if NODE_ENV is development for local verification checks
-      if (process.env.NODE_ENV === 'development') {
+      // If Firebase Admin failed to initialize, only allow the mock token
+      // fallback under the automated test suite. Development/production must
+      // fail closed — never silently accept a fabricated identity.
+      if (process.env.NODE_ENV === 'test') {
         decodedToken = { uid: 'mock-firebase-uid', email: 'dev@ghostsmtp.com' };
-        console.log('[Auth Middleware] Using developer mock token verification fallback.');
+        console.log('[Auth Middleware] Using test mock token verification fallback.');
       } else {
-        return res.status(500).json({ error: 'Firebase Auth is uninitialized in production.' });
+        return res.status(500).json({ error: 'Firebase Auth is uninitialized. Authentication unavailable.' });
       }
     }
 

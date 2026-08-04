@@ -2,33 +2,58 @@ import crypto from 'crypto';
 import { WebhookRepository } from '../repositories/webhook.repository';
 import { WebhookEventModel } from '../models/webhookEvent.model';
 import { WebhookQueueService } from './webhookQueue.service';
+import { SecurityService } from './security.service';
 
 export class WebhookService {
   private webhookRepo = new WebhookRepository();
   private queueService = new WebhookQueueService();
 
   /**
-   * Registers a new webhook endpoint.
+   * The signing secret is encrypted at rest. Legacy rows created before
+   * encryption still carry a plaintext `whsec_...` value; this resolves both.
+   */
+  private resolveSecretForDispatch(storedSecret: string): string {
+    if (storedSecret.startsWith('whsec_')) {
+      return storedSecret;
+    }
+    return SecurityService.decryptSecret(storedSecret);
+  }
+
+  /**
+   * Strips the (encrypted) secret from a document before it leaves the API so
+   * plaintext secrets are only ever revealed once — at creation or rotation.
+   */
+  private stripSecret(doc: any) {
+    const { secret, ...rest } = doc.toObject ? doc.toObject() : doc;
+    return rest;
+  }
+
+  /**
+   * Registers a new webhook endpoint. The plaintext signing secret is returned
+   * exactly once in the create response.
    */
   async createWebhook(workspaceId: string, url: string, events: string[]) {
     // Generate secure signing secret (whsec_...)
     const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
 
-    return this.webhookRepo.create({
+    const saved = await this.webhookRepo.create({
       workspaceId: workspaceId as any,
       url,
-      secret,
+      secret: SecurityService.encryptSecret(secret),
       events,
       active: true,
       isDeleted: false,
     } as any);
+
+    return { ...saved.toObject(), secret };
   }
 
   /**
-   * Lists all registered webhooks for a workspace.
+   * Lists all registered webhooks for a workspace (secret never included).
    */
   async listWebhooks(workspaceId: string) {
-    return this.webhookRepo.find({ workspaceId, isDeleted: false });
+    const webhooks = await this.webhookRepo.find({ workspaceId, isDeleted: false });
+    return webhooks.map((wh: any) => this.stripSecret(wh));
   }
 
   /**
@@ -41,11 +66,13 @@ export class WebhookService {
     }
 
     webhook.active = active;
-    return webhook.save();
+    const saved = await webhook.save();
+    return this.stripSecret(saved);
   }
 
   /**
-   * Rotates signature secret keys.
+   * Rotates signature secret keys. The new plaintext secret is returned exactly
+   * once in the rotate response.
    */
   async rotateSecret(workspaceId: string, webhookId: string) {
     const webhook = await this.webhookRepo.findOne({ _id: webhookId, workspaceId, isDeleted: false });
@@ -53,8 +80,10 @@ export class WebhookService {
       throw new Error('Webhook endpoint not found.');
     }
 
-    webhook.secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
-    return webhook.save();
+    const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
+    webhook.secret = SecurityService.encryptSecret(secret);
+    const saved = await webhook.save();
+    return { ...saved.toObject(), secret };
   }
 
   /**
@@ -101,7 +130,7 @@ export class WebhookService {
       eventId: testEvent.id,
       url: webhook.url,
       payload: testPayload,
-      secret: webhook.secret,
+      secret: this.resolveSecretForDispatch(webhook.secret),
     });
 
     return { success: true, message: 'Test webhook job successfully enqueued.' };
@@ -131,7 +160,7 @@ export class WebhookService {
         eventId: webhookEvent.id,
         url: wh.url,
         payload,
-        secret: wh.secret,
+        secret: this.resolveSecretForDispatch(wh.secret),
       })
     );
 

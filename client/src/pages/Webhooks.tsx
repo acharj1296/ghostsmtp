@@ -33,6 +33,9 @@ export const Webhooks = () => {
   // Clipboard copy state
   const [copied, setCopied] = useState(false);
 
+  // Plaintext signing secret is revealed exactly once (create/rotate response).
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+
   // Notification states
   const [notify, setNotify] = useState({ show: false, title: '', message: '', type: 'info' as any });
 
@@ -63,6 +66,7 @@ export const Webhooks = () => {
       setUrl('');
       setSelectedEvents(['delivered', 'bounced']);
       setSelectedWebhookId(data._id); // Auto select new webhook to show secret key
+      setRevealedSecret(data.secret); // Reveal the plaintext signing secret once
       showNotification('Success', 'Webhook registered successfully.', 'success');
     },
     onError: (err: any) => {
@@ -88,8 +92,9 @@ export const Webhooks = () => {
       const res = await apiClient.post(`/webhooks/${id}/rotate`);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['webhooks'] });
+      setRevealedSecret(data.secret); // Reveal the new plaintext signing secret once
       showNotification('Rotated', 'Webhook signing secret rotated.', 'success');
     },
     onError: (err: any) => {
@@ -117,6 +122,7 @@ export const Webhooks = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['webhooks'] });
       if (selectedWebhookId) setSelectedWebhookId(null);
+      setRevealedSecret(null);
       showNotification('Success', 'Webhook deleted successfully.', 'success');
     },
     onError: (err: any) => {
@@ -134,6 +140,11 @@ export const Webhooks = () => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2050);
+  };
+
+  const handleSelectWebhook = (id: string) => {
+    setRevealedSecret(null); // Only ever show a plaintext secret once
+    setSelectedWebhookId(id);
   };
 
   const handleEventToggle = (eventName: string) => {
@@ -218,7 +229,7 @@ export const Webhooks = () => {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => setSelectedWebhookId(w._id)}
+                            onClick={() => handleSelectWebhook(w._id)}
                             className="flex items-center gap-1 text-slate-600 dark:text-slate-300"
                           >
                             <Eye className="w-4 h-4" />
@@ -281,11 +292,16 @@ export const Webhooks = () => {
                   <div>
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400 font-sans">HMAC Signature Secret</span>
                     <div className="flex items-center gap-2 mt-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs font-mono break-all justify-between text-slate-800 dark:text-slate-200">
-                      <span className="truncate mr-2">{selectedWebhook.secret}</span>
-                      <Button variant="ghost" size="sm" onClick={() => handleCopy(selectedWebhook.secret)} className="p-1">
-                        {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-slate-400" />}
-                      </Button>
+                      <span className="truncate mr-2">{revealedSecret ?? 'whsec_••••••••••••••••••••••••••••••'}</span>
+                      {revealedSecret && (
+                        <Button variant="ghost" size="sm" onClick={() => handleCopy(revealedSecret)} className="p-1">
+                          {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-slate-400" />}
+                        </Button>
+                      )}
                     </div>
+                    {!revealedSecret && (
+                      <p className="text-[10px] text-slate-400 mt-1">Secret is masked for security. Rotate to reveal a new one.</p>
+                    )}
                   </div>
 
                   <div>

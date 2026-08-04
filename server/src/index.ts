@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env';
+import { assertEncryptionKeyConfigured } from './config/encryptionGuard';
 import { connectDatabase, getDbStatus } from './db/mongoose';
 import { rateLimiter } from './middleware/rateLimit.middleware';
 import { errorHandler } from './middleware/errorHandler.middleware';
@@ -12,13 +13,14 @@ import emailRouter from './routes/email.routes';
 import webhookRouter from './routes/webhook.routes';
 import profileRouter from './routes/profile.routes';
 import templateRouter from './routes/template.routes';
-import { getQueueService } from './services/queue.service';
-import WebhookQueueService from './services/webhookQueue.service';
 
 const app = express();
 
 // Apply global middlewares
 app.use(helmet());
+
+// nginx is the only reverse proxy in front of the API, so exactly one trusted hop.
+app.set('trust proxy', env.TRUST_PROXY_HOPS);
 
 // Secure CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
@@ -37,8 +39,10 @@ app.use(cors({
 }));
 
 app.use(rateLimiter);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 20MB cap accepts 8MB attachments (base64 overhead ~33%) with headroom,
+// while staying below Postfix's 25MB message_size_limit.
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // API Routers
 app.use('/api/v1/domains', domainRouter);
@@ -73,15 +77,15 @@ app.get('/api/v1/health', (req, res) => {
 // Start Express Server & MongoDB Connection
 const startServer = async () => {
   try {
+    // Fail fast in production if secrets cannot be encrypted at rest.
+    assertEncryptionKeyConfigured();
+
     // Establish DB Connection
     await connectDatabase();
 
-    // Start BullMQ worker after MongoDB is ready
-    getQueueService().startWorker();
-
-    // Start webhook delivery worker
-    const webhookQueueService = new WebhookQueueService();
-    webhookQueueService.startWorker();
+    // NOTE: BullMQ workers no longer run inside the API process. Dedicated
+    // `send-worker` and `webhook-worker` containers consume the queues, which
+    // lets the API scale horizontally without duplicate consumers.
 
     const server = app.listen(env.PORT, () => {
       console.log(`[GhostSMTP API] Server is running on port ${env.PORT} in ${env.NODE_ENV} mode.`);

@@ -31,7 +31,13 @@ export class EmailSendService {
   private queueService = getQueueService();
 
   private async validateCredential(workspaceId: string, credentialId?: string) {
+    // A missing credentialId is allowed when a fallback outbound relay is
+    // configured (SMTP_HOST), which the queue worker resolves automatically.
+    // This matches the Email Composer's "Using Default system relay" behavior.
     if (!credentialId) {
+      if (process.env.SMTP_HOST) {
+        return null;
+      }
       throw new Error('SMTP credential is required. Select an active credential in the Email Composer.');
     }
 

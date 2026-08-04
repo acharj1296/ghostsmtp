@@ -1,55 +1,51 @@
 import { Request, Response, NextFunction } from 'express';
+import Redis from 'ioredis';
+import { env } from '../config/env';
 
-const rateLimitWindowMs = 15 * 60 * 1000; // 15 minutes
-const rateLimitMaxRequests = 200; // limit each IP to 200 requests per windowMs
+// Shared Redis connection for the fixed-window limiter. BullMQ uses its own
+// connections; this one is dedicated to rate limiting.
+const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 1 });
 
-interface RateLimitRecord {
-  count: number;
-  resetTime: number;
-}
+const windowSeconds = Math.max(1, Math.ceil(env.RATE_LIMIT_WINDOW_MS / 1000));
+const maxRequests = env.RATE_LIMIT_IP_MAX;
 
-const store = new Map<string, RateLimitRecord>();
-
-// Cleanup routine to prevent memory leaks
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, record] of store.entries()) {
-    if (now > record.resetTime) {
-      store.delete(ip);
-    }
-  }
-}, 300000); // Clean every 5 minutes
-
-export const rateLimiter = (req: Request, res: Response, next: NextFunction) => {
+/**
+ * Redis-backed fixed-window IP rate limiter. Emits standard
+ * X-RateLimit-Limit / X-RateLimit-Remaining / X-RateLimit-Reset headers plus
+ * Retry-After on rejection so clients and CDNs can throttle correctly.
+ *
+ * Requires `trust proxy` to be configured so req.ip reflects the real client
+ * behind nginx. Fails open with a loud log only if Redis is briefly down.
+ */
+export const rateLimiter = async (req: Request, res: Response, next: NextFunction) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
-  const now = Date.now();
+  const key = `rl:ip:${ip}`;
 
-  let record = store.get(ip);
+  try {
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, windowSeconds);
+    }
 
-  if (!record) {
-    store.set(ip, {
-      count: 1,
-      resetTime: now + rateLimitWindowMs,
-    });
+    const ttl = await redis.ttl(key);
+    const remaining = Math.max(0, maxRequests - count);
+
+    res.setHeader('X-RateLimit-Limit', String(maxRequests));
+    res.setHeader('X-RateLimit-Remaining', String(remaining));
+    res.setHeader('X-RateLimit-Reset', String(Math.floor(Date.now() / 1000) + Math.max(0, ttl)));
+
+    if (count > maxRequests) {
+      res.setHeader('Retry-After', String(Math.max(1, ttl)));
+      return res.status(429).json({
+        error: 'Too many requests from this IP. Please try again later.',
+      });
+    }
+
+    return next();
+  } catch (error: any) {
+    console.error('[RateLimiter] Redis error, allowing request through:', error.message);
     return next();
   }
-
-  if (now > record.resetTime) {
-    record.count = 1;
-    record.resetTime = now + rateLimitWindowMs;
-    return next();
-  }
-
-  record.count += 1;
-
-  if (record.count > rateLimitMaxRequests) {
-    res.setHeader('Retry-After', Math.ceil((record.resetTime - now) / 1000));
-    return res.status(429).json({
-      error: 'Too many requests from this IP. Please try again later.',
-    });
-  }
-
-  next();
 };
 
 export default rateLimiter;

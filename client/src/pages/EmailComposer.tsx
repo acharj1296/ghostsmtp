@@ -37,7 +37,8 @@ interface Domain {
 interface SmtpCredential {
   _id?: string;
   id?: string;
-  username: string;
+  username?: string;
+  smtpUsername?: string;
   description?: string;
   status: 'active' | 'disabled';
 }
@@ -404,7 +405,7 @@ export const EmailComposer = () => {
                     >
                       {smtpCredentials.map((c) => (
                         <option key={c._id || c.id} value={c._id || c.id}>
-                          {c.username} ({c.description || 'Active'})
+                          {c.username || c.smtpUsername || 'Default relay'} ({c.description || 'Active'})
                         </option>
                       ))}
                     </select>

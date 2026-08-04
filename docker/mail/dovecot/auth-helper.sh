@@ -12,7 +12,7 @@ fi
 response=$(curl -s -w "%{http_code}" -o /tmp/auth_resp.json \
   -H "Content-Type: application/json" \
   -d "{\"username\":\"$USER\",\"password\":\"$password\",\"clientIp\":\"$IP\"}" \
-  http://host.docker.internal:5000/api/v1/internal/smtp-auth)
+  http://api:4000/api/v1/internal/smtp-auth)
 
 # Check HTTP Status Code
 if [ "$response" = "200" ]; then

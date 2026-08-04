@@ -139,7 +139,7 @@ export const Profile = () => {
     setErrorMsg('');
     setLoading(true);
 
-    const mergedName = `${firstName} ${lastName}`.trim() || displayName;
+    const mergedName = displayName.trim() || `${firstName} ${lastName}`.trim();
 
     try {
       if (currentUser) {
@@ -492,7 +492,7 @@ export const Profile = () => {
                       <select 
                         value={country} 
                         onChange={(e) => setCountry(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-lg text-sm text-slate-350 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         <option>United States</option>
                         <option>Canada</option>
@@ -507,7 +507,7 @@ export const Profile = () => {
                       <select 
                         value={timezone} 
                         onChange={(e) => setTimezone(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-lg text-sm text-slate-350 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         <option>UTC-5 (EST)</option>
                         <option>UTC+0 (GMT)</option>
@@ -521,7 +521,7 @@ export const Profile = () => {
                       <select 
                         value={language} 
                         onChange={(e) => setLanguage(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-lg text-sm text-slate-350 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
                       >
                         <option>English</option>
                         <option>Spanish</option>
@@ -555,7 +555,7 @@ export const Profile = () => {
                 <form onSubmit={handlePhotoUpload} className="space-y-6">
                   
                   {/* File Upload Box */}
-                  <div className="flex flex-col sm:flex-row items-center gap-6 p-6 border border-dashed border-slate-850 rounded-2xl bg-slate-950/40 text-center sm:text-left justify-center sm:justify-start">
+                  <div className="flex flex-col sm:flex-row items-center gap-6 p-6 border border-dashed border-slate-800 rounded-2xl bg-slate-950/40 text-center sm:text-left justify-center sm:justify-start">
                     <div className="relative">
                       {photoPreview || photoURL ? (
                         <img src={photoPreview || photoURL} alt="Preview" className="w-24 h-24 rounded-full object-cover border-2 border-brand-500" />
@@ -671,7 +671,7 @@ export const Profile = () => {
                             {requirements.map((req) => (
                               <li key={req.id} className="flex items-center gap-1.5">
                                 <span className={req.met ? 'text-emerald-500' : 'text-slate-600'}>✓</span>
-                                <span className={req.met ? 'text-slate-400' : 'text-slate-505'}>{req.label}</span>
+                                <span className={req.met ? 'text-slate-400' : 'text-slate-500'}>{req.label}</span>
                               </li>
                             ))}
                           </ul>
@@ -844,7 +844,7 @@ export const Profile = () => {
                 </div>
 
                 <div className="pt-4 border-t border-slate-900">
-                  <Button variant="outline" className="text-xs border-slate-850 hover:bg-slate-900 text-slate-350" onClick={() => setSuccessMsg('Other sessions successfully logged out!')}>
+                  <Button variant="outline" className="text-xs border-slate-800 hover:bg-slate-900 text-slate-400" onClick={() => setSuccessMsg('Other sessions successfully logged out!')}>
                     Sign Out Other Devices
                   </Button>
                 </div>

@@ -81,6 +81,10 @@ export const ApiKeys = () => {
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyName.trim()) return;
+    if (scopes.length === 0) {
+      showNotification('Error', 'At least one permission scope is required.', 'error');
+      return;
+    }
     createMutation.mutate({ name: keyName.trim(), scopes });
   };
 

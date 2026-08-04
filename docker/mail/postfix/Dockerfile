@@ -4,8 +4,16 @@ FROM alpine:3.19
 RUN apk add --no-cache \
     postfix \
     rsyslog \
+    openssl \
     ca-certificates \
     tzdata
+
+# Generate a self-signed TLS certificate for STARTTLS support
+RUN mkdir -p /etc/ssl/private && \
+    openssl req -new -x509 -days 3650 -nodes \
+      -out /etc/ssl/certs/ssl-cert-snakeoil.pem \
+      -keyout /etc/ssl/private/ssl-cert-snakeoil.key \
+      -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=localhost"
 
 # Create necessary directories
 RUN mkdir -p /etc/postfix /var/spool/postfix/private /var/spool/postfix/public

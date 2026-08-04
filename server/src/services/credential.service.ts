@@ -104,6 +104,7 @@ export class CredentialService {
       port: c.port,
       secure: c.secure,
       smtpUsername: c.smtpUsername,
+      username: c.username,
       description: c.description,
       status: c.status,
       lastUsedAt: c.lastUsedAt,

@@ -7,7 +7,7 @@ export class ApiKeyRepository extends BaseRepository<IApiKey> {
   }
 
   async findByKeyHash(keyHash: string): Promise<IApiKey | null> {
-    return this.findOne({ keyHash, active: true });
+    return this.findOne({ keyHash, status: 'active' });
   }
 
   async findByWorkspace(workspaceId: string): Promise<IApiKey[]> {

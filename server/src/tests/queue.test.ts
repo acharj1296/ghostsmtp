@@ -6,6 +6,12 @@ import { QueueJobRepository } from '../repositories/queueJob.repository';
 
 const TEST_MONGO_URI = process.env.MONGODB_URI || 'mongodb://admin:admin_password@localhost:27017/ghostsmtp_test?authSource=admin';
 
+// Unique per run so stale Redis jobs with the same jobId never collide
+const RUN_ID = Date.now().toString(36);
+const MSG_1 = `msg_test_1_${RUN_ID}`;
+const MSG_2 = `msg_test_2_${RUN_ID}`;
+const MSG_3 = `msg_test_3_${RUN_ID}`;
+
 async function runQueueTests() {
   console.log('--- Starting Mail Queue Infrastructure Integration Tests ---');
 
@@ -44,13 +50,13 @@ async function runQueueTests() {
   try {
     // Test 1: Add a basic email job
     console.log('Queuing test job...');
-    const mailPayload1 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: 'msg_test_1' };
+    const mailPayload1 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: MSG_1 };
     const job1 = await queueService.addEmailJob(workspace.id, mailPayload1);
     assert(job1.status === 'queued' && job1.retryCount === 0, 'Add Job: Job correctly created in queued status.');
 
     // Test 2: Add a delayed job
     console.log('Queuing delayed job...');
-    const mailPayload2 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: 'msg_test_2' };
+    const mailPayload2 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: MSG_2 };
     const job2 = await queueService.addEmailJob(workspace.id, mailPayload2, 10000); // 10s delay
     assert(job2.status === 'pending', 'Delayed Job: Delayed job initialized in pending status.');
 
@@ -72,7 +78,7 @@ async function runQueueTests() {
 
     // Test 5: Worker failure and DLQ retry logic
     console.log('Queuing failed job to test DLQ backoff...');
-    const mailPayload3 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: 'msg_test_3' };
+    const mailPayload3 = { to: ['recipient@domain.com'], from: 'sender@domain.com', subject: 'Hello', text: 'World', messageId: MSG_3 };
     const job3 = await queueService.addEmailJob(workspace.id, mailPayload3);
     
     // Start worker with 100% failure ratio

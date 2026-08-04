@@ -65,7 +65,10 @@ export class SmtpAuthService {
     // if (!rateLimitAllowed) return { authenticated: false, error: 'Rate limit exceeded.' };
 
     // 5. Secure Argon2 Password verification
-    const passwordMatches = await SecurityService.verifyPassword(credential.passwordHash, password);
+    const passwordMatches = await SecurityService.verifyPassword(
+      credential.passwordHash ?? "",
+      password ?? ""
+    );
     if (!passwordMatches) {
       await this.handleFailedAttempt(trimmedUsername, clientIp, 'Incorrect password.');
       return { authenticated: false, error: 'Invalid SMTP username or password.' };

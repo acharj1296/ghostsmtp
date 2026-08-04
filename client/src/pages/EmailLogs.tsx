@@ -87,7 +87,7 @@ export const EmailLogs = () => {
                     <TableCell className="text-slate-700 dark:text-slate-300 text-xs font-medium max-w-[200px] truncate">{log.subject}</TableCell>
                     <TableCell>
                       <Badge variant={
-                        log.status === 'delivered' || log.status === 'sent' ? 'success' :
+                        log.status === 'delivered' || log.status === 'sent' || log.status === 'accepted' ? 'success' :
                         log.status === 'queued' || log.status === 'processing' ? 'info' :
                         log.status === 'deferred' ? 'warning' : 'error'
                       }>

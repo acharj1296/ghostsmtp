@@ -101,7 +101,7 @@ export const SmtpCredentials = () => {
       // Find original description
       const orig = credentials.find((c: any) => c.id === id);
       setShowCredentialInfo({
-        username: orig?.username || 'Username',
+        username: orig?.username || orig?.smtpUsername || 'Username',
         password: data.plaintextPassword,
         description: orig?.description || 'Regenerated Key',
         isRegen: true,
@@ -189,7 +189,7 @@ export const SmtpCredentials = () => {
                 {credentials.map((c: any) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-semibold text-slate-900 dark:text-white">{c.description}</TableCell>
-                    <TableCell className="font-mono text-xs">{c.username}</TableCell>
+                    <TableCell className="font-mono text-xs">{c.username || c.smtpUsername || '—'}</TableCell>
                     <TableCell>
                       <Badge variant={c.status === 'active' ? 'success' : 'warning'}>
                         {c.status}

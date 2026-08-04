@@ -9,7 +9,10 @@ export class TemplateController {
     }
 
     try {
-      const templates = await TemplateModel.find({ workspaceId }).sort({ createdAt: -1 });
+      const templates = await TemplateModel.find({
+        workspaceId,
+        isDeleted: { $ne: true },
+      }).sort({ createdAt: -1 });
       return res.status(200).json(templates);
     } catch (error: any) {
       return res.status(500).json({ error: error.message });

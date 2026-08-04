@@ -84,7 +84,7 @@ export const Domains = () => {
       setIsCreateOpen(false);
       setNewDomainName('');
       // POST /domains returns { domain, dkim, verification } — the new domain
-      // id lives on data.domain, not at the top level.
+      // id lives on data.domain._id, not at the top level.
       setSelectedDomainId(data.domain?._id || data.domain?.id || null); // Auto open details for the newly created domain
       showNotification('Success', 'Domain created successfully.', 'success');
     },

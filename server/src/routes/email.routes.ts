@@ -12,9 +12,10 @@ const controller = new EmailController();
 router.post('/send', authenticateApiKey, requireScope('send'), controller.send);
 
 // Dashboard route actions require Firebase user token checks
+// IMPORTANT: /stats must be registered before /:messageId/events so "stats" is not treated as a messageId.
 router.post('/composer-send', authenticateUser, controller.sendComposer);
-router.get('/', authenticateUser, controller.list);
 router.get('/stats', authenticateUser, controller.getStats);
+router.get('/', authenticateUser, controller.list);
 router.get('/:messageId/events', authenticateUser, controller.getEvents);
 
 export default router;

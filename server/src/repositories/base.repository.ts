@@ -1,4 +1,4 @@
-import { Model, Document, FilterQuery, UpdateQuery } from 'mongoose';
+import { Model, Document, FilterQuery, UpdateQuery, Types } from 'mongoose';
 
 export abstract class BaseRepository<T extends Document> {
   protected constructor(protected readonly model: Model<T>) {}
@@ -8,6 +8,7 @@ export abstract class BaseRepository<T extends Document> {
   }
 
   async findById(id: string): Promise<T | null> {
+    if (!Types.ObjectId.isValid(id)) return null;
     return this.model.findById(id).exec();
   }
 
@@ -20,11 +21,13 @@ export abstract class BaseRepository<T extends Document> {
   }
 
   async update(id: string, item: UpdateQuery<T>): Promise<T | null> {
+    if (!Types.ObjectId.isValid(id)) return null;
     return this.model.findByIdAndUpdate(id, item, { new: true }).exec();
   }
 
   async delete(id: string): Promise<T | null> {
     // Perform soft delete
+    if (!Types.ObjectId.isValid(id)) return null;
     return this.model.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() } as unknown as UpdateQuery<T>,

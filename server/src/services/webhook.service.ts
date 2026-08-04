@@ -24,8 +24,15 @@ export class WebhookService {
    * plaintext secrets are only ever revealed once — at creation or rotation.
    */
   private stripSecret(doc: any) {
-    const { secret, ...rest } = doc.toObject ? doc.toObject() : doc;
-    return rest;
+    const raw = doc.toObject ? doc.toObject() : doc;
+    const { secret, ...rest } = raw;
+    const id = (rest._id ?? rest.id)?.toString?.() ?? rest._id ?? rest.id;
+    return {
+      ...rest,
+      _id: id,
+      id,
+      workspaceId: rest.workspaceId?.toString?.() ?? rest.workspaceId,
+    };
   }
 
   /**
@@ -45,7 +52,18 @@ export class WebhookService {
       isDeleted: false,
     } as any);
 
-    return { ...saved.toObject(), secret };
+    // Return plain object with _id for frontend compatibility
+    const webhookObj = saved.toObject ? saved.toObject() : saved;
+    return {
+      _id: webhookObj._id?.toString() || webhookObj.id,
+      id: webhookObj._id?.toString() || webhookObj.id,
+      workspaceId: webhookObj.workspaceId?.toString(),
+      url: webhookObj.url,
+      events: webhookObj.events,
+      active: webhookObj.active,
+      secret: secret,
+      createdAt: webhookObj.createdAt,
+    };
   }
 
   /**
@@ -83,7 +101,17 @@ export class WebhookService {
     const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
     webhook.secret = SecurityService.encryptSecret(secret);
     const saved = await webhook.save();
-    return { ...saved.toObject(), secret };
+    const webhookObj = saved.toObject ? saved.toObject() : saved;
+    return {
+      _id: webhookObj._id?.toString() || webhookObj.id,
+      id: webhookObj._id?.toString() || webhookObj.id,
+      workspaceId: webhookObj.workspaceId?.toString(),
+      url: webhookObj.url,
+      events: webhookObj.events,
+      active: webhookObj.active,
+      secret: secret,
+      createdAt: webhookObj.createdAt,
+    };
   }
 
   /**

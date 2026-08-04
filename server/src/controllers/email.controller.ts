@@ -54,12 +54,14 @@ export class EmailController {
 
   async getEvents(req: Request, res: Response) {
     const workspaceId = req.workspaceId;
-    const { messageId } = req.params;
+    let { messageId } = req.params;
     if (!workspaceId) {
       return res.status(400).json({ error: 'Missing active workspace identification.' });
     }
 
     try {
+      // Decode the messageId since it may contain URL-encoded characters (like <, >, @)
+      messageId = decodeURIComponent(messageId);
       const events = await trackingService.getEventHistory(workspaceId, messageId);
       return res.status(200).json(events);
     } catch (error: any) {
@@ -93,5 +95,6 @@ export class EmailController {
       return res.status(500).json({ error: error.message });
     }
   }
-}
+
+  }
 export default EmailController;

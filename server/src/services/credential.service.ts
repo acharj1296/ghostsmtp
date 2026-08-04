@@ -98,7 +98,8 @@ export class CredentialService {
   async listSmtpCredentials(workspaceId: string) {
     const creds = await this.smtpRepo.findByWorkspace(workspaceId);
     return creds.map(c => ({
-      id: c.id,
+      id: c.id?.toString?.() ?? c.id,
+      _id: c.id?.toString?.() ?? c.id,
       // Show host/port when available; never expose password or encrypted data
       host: c.host,
       port: c.port,
@@ -226,7 +227,8 @@ export class CredentialService {
   async listApiKeys(workspaceId: string) {
     const keys = await this.apiKeyRepo.findByWorkspace(workspaceId);
     return keys.map(k => ({
-      id: k.id,
+      id: k.id?.toString?.() ?? k.id,
+      _id: k.id?.toString?.() ?? k.id,
       apiKeyId: k.apiKeyId,
       name: k.name,
       scopes: k.scopes,

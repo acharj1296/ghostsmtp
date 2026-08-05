@@ -10,7 +10,7 @@ try {
 
 const dnsPromises = dns.promises;
 
-export type DnsCheckType = 'TXT' | 'MX' | 'CNAME' | 'SRV';
+export type DnsCheckType = 'TXT' | 'MX' | 'CNAME' | 'SRV' | 'A' | 'AAAA' | 'CAA' | 'PTR';
 
 export interface DnsCheckResult {
   /** Stable key, e.g. 'spf', 'dkim', 'dmarc', 'mx', 'tracking'. */
@@ -92,6 +92,39 @@ export class DnsLookupService {
     }
   }
 
+  private async lookupA(host: string): Promise<string[]> {
+    try {
+      return await dnsPromises.resolve4(host);
+    } catch (err: any) {
+      throw new Error(this.describeDnsError(host, 'A', err));
+    }
+  }
+
+  private async lookupAAAA(host: string): Promise<string[]> {
+    try {
+      return await dnsPromises.resolve6(host);
+    } catch (err: any) {
+      throw new Error(this.describeDnsError(host, 'AAAA', err));
+    }
+  }
+
+  private async lookupCAA(host: string): Promise<string[]> {
+    try {
+      const records = await dnsPromises.resolveCaa(host);
+      return records.map((r) => `${r.critical} ${r.issue || r.issuewild || r.iodef || ''} "${r.value}"`);
+    } catch (err: any) {
+      throw new Error(this.describeDnsError(host, 'CAA', err));
+    }
+  }
+
+  private async lookupPTR(ip: string): Promise<string[]> {
+    try {
+      return await dnsPromises.reverse(ip);
+    } catch (err: any) {
+      throw new Error(this.describeDnsError(ip, 'PTR', err));
+    }
+  }
+
   private describeDnsError(host: string, type: DnsCheckType, err: any): string {
     const code = err?.code;
     if (code === 'ENOTFOUND' || code === 'ENODATA' || code === 'NXDOMAIN') {
@@ -140,6 +173,33 @@ export class DnsLookupService {
     // Generic TXT: normalized substring containment.
     const match = normalized.find((r) => r.includes(expectedNorm));
     return this.build(input, all, match || null);
+  }
+
+  private async verifyPtr(input: DnsCheckInput): Promise<DnsCheckResult> {
+    // input.host carries the server IP to reverse; expected is the hostname the
+    // PTR record must resolve to (the mail server hostname).
+    const all = await this.lookupPTR(input.host);
+    const expectedNorm = this.normHost(input.expected);
+    const match = all.find((hostname) => this.normHost(hostname) === expectedNorm) || null;
+    return this.build(input, all, match);
+  }
+
+  /**
+   * Detect whether a domain is signed with DNSSEC. A domain is DNSSEC-enabled
+   * when an RRSIG record is published for its root. Non-fatal: returns false if
+   * the lookup fails (e.g. the resolver does not expose RRSIG).
+   */
+  async checkDnssec(domain: string): Promise<{ enabled: boolean; detail?: string }> {
+    try {
+      const records = await dnsPromises.resolve(domain, 'RRSIG');
+      const enabled = Array.isArray(records) && records.length > 0;
+      return {
+        enabled,
+        detail: enabled ? `DNSSEC signature found (${records.length} RRSIG record(s)).` : 'No DNSSEC signature detected for this domain.',
+      };
+    } catch (err: any) {
+      return { enabled: false, detail: `DNSSEC lookup failed: ${err?.message || 'unknown error'}` };
+    }
   }
 
   private async verifyMx(input: DnsCheckInput): Promise<DnsCheckResult> {
@@ -203,6 +263,8 @@ export class DnsLookupService {
         return this.verifyCname(input);
       case 'SRV':
         return this.verifySrv(input);
+      case 'PTR':
+        return this.verifyPtr(input);
       case 'TXT':
       default:
         return this.verifyTxt(input);

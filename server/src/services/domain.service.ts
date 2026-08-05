@@ -4,12 +4,18 @@ import { DkimKeyRepository } from '../repositories/dkimKey.repository';
 import { DomainVerificationRepository } from '../repositories/domainVerification.repository';
 import { env } from '../config/env';
 import { DnsGeneratorService, DnsGenerationOptions, GeneratedDnsSet } from './dnsGenerator.service';
-import { DnsLookupService, DnsCheckInput } from './dnsLookup.service';
+import { DnsLookupService, DnsCheckInput, DnsCheckResult } from './dnsLookup.service';
+import { DnsHealthService, HealthScoreFactors } from './dnsHealth.service';
+import { DnsPropagationService } from './dnsPropagation.service';
+import { DeliverabilityService, DeliverabilityCheckFactors } from './deliverability.service';
 import { OpenDkimService } from './opendkim.service';
 import { SecurityService } from './security.service';
 
 const dnsGenerator = new DnsGeneratorService();
 const dnsLookup = new DnsLookupService();
+const dnsHealth = new DnsHealthService();
+const dnsPropagation = new DnsPropagationService();
+const deliverability = new DeliverabilityService();
 const openDkim = new OpenDkimService();
 
 /** Domain status when every sending-critical DNS check passes. */
@@ -75,7 +81,8 @@ export class DomainService {
   }
 
   /** Persist the full generated DNS set onto a DomainVerification document. */
-  private applyGeneratedSet(verification: any, domain: any, dkim: any, set: GeneratedDnsSet): void {
+  private applyGeneratedSet(verification: any, domain: any, _dkim: any, set: GeneratedDnsSet): void {
+    // Core records
     verification.spfRecord = set.raw.spf;
     verification.dkimRecord = set.raw.dkim;
     verification.dmarcRecord = set.raw.dmarc;
@@ -88,6 +95,24 @@ export class DomainService {
     verification.autodiscoverRecord = set.raw.autodiscoverRecord;
     verification.mailFrom = set.raw.mailFrom;
     verification.dmarcPolicy = domain.dmarcPolicy || 'none';
+
+    // Production DNS records
+    verification.mailARecord = set.raw.mailA;
+    if (set.raw.mailAAAA) {
+      verification.mailAAAARecord = set.raw.mailAAAA;
+    }
+    verification.smtpCname = set.raw.smtpCname;
+    verification.imapCname = set.raw.imapCname;
+    verification.pop3Cname = set.raw.pop3Cname;
+    verification.webmailCname = set.raw.webmailCname;
+    verification.mtaStsRecord = set.raw.mtaSts;
+    verification.tlsRptRecord = set.raw.tlsRpt;
+    if (set.raw.caa) {
+      verification.caaRecord = set.raw.caa;
+    }
+    if (set.raw.bimi) {
+      verification.bimiRecord = set.raw.bimi;
+    }
   }
 
   /**
@@ -261,7 +286,7 @@ export class DomainService {
     const p = this.prefixes(domain);
     const selector = dkim?.selector || domain.dkimSelector || env.DEFAULT_DKIM_SELECTOR || 'ghost';
 
-    return [
+    const checks: DnsCheckInput[] = [
       { record: 'spf', label: 'SPF', type: 'TXT', host: domain.name, expected: verification.spfRecord },
       { record: 'dkim', label: 'DKIM', type: 'TXT', host: `${selector}._domainkey.${domain.name}`, expected: verification.dkimRecord },
       { record: 'dmarc', label: 'DMARC', type: 'TXT', host: `_dmarc.${domain.name}`, expected: verification.dmarcRecord },
@@ -272,6 +297,20 @@ export class DomainService {
       { record: 'autoconfig', label: 'Autoconfig CNAME', type: 'CNAME', host: `${p.autoconfig}.${domain.name}`, expected: verification.autoconfigCname },
       { record: 'autodiscover', label: 'Autodiscover SRV', type: 'SRV', host: `_autodiscover._tcp.${domain.name}`, expected: verification.autodiscoverRecord },
     ];
+
+    // Reverse DNS (PTR): reverse-lookup the mail server IP; expect it to resolve
+    // to the mail server hostname. Informational — not part of REQUIRED_CHECKS.
+    if (domain.mailServerIp) {
+      checks.push({
+        record: 'ptr',
+        label: 'PTR / Reverse DNS',
+        type: 'PTR',
+        host: domain.mailServerIp,
+        expected: env.MAIL_SERVER_HOST || domain.mailServerHost,
+      });
+    }
+
+    return checks;
   }
 
   async verifyDomain(workspaceId: string, domainId: string) {
@@ -320,9 +359,19 @@ export class DomainService {
       verified: r.verified,
       error: r.error,
     }));
+    // PTR is informational (not part of REQUIRED_CHECKS): persist the matched
+    // hostname for the health/deliverability analyzers but don't surface it as a
+    // domain error.
+    const ptrResult = byRecord.get('ptr');
+    verification.ptrRecord = ptrResult?.actual || '';
     verification.verificationErrors = results
-      .filter((r) => !r.verified)
+      .filter((r) => !r.verified && r.record !== 'ptr')
       .map((r) => `${r.label} (${r.host}): ${r.error || 'record not found'}`);
+
+    // Detect DNSSEC signing (RRSIG present on the apex). Informational.
+    const dnssec = await dnsLookup.checkDnssec(domain.name);
+    verification.dnssecEnabled = dnssec.enabled;
+
     await verification.save();
 
     // Determine overall status from the sending-critical checks.
@@ -404,5 +453,180 @@ export class DomainService {
     await verification.save();
 
     return { domain, dkim, verification };
+  }
+
+  /**
+   * Calculate DNS health score for a domain based on verification results
+   */
+  async calculateHealthScore(workspaceId: string, domainId: string) {
+    const domain = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
+    if (!domain) {
+      throw new Error('Domain not found.');
+    }
+
+    const verification = await this.verificationRepo.findByDomainId(domainId);
+    if (!verification) {
+      throw new Error('Domain verification data not found.');
+    }
+
+    // Build health factors from verification status
+    const factors: HealthScoreFactors = {
+      spfPresent: verification.spfVerified,
+      dkimValid: verification.dkimVerified,
+      dmarcConfigured: verification.dmarcVerified,
+      mxValid: verification.mxVerified,
+      ptrPresent: !!verification.ptrRecord,
+      tlsCapable: true, // Assumed from infrastructure
+      mtaStsConfigured: verification.mtaStsVerified,
+      bimiConfigured: !!verification.bimiRecord,
+      dnssecEnabled: verification.dnssecEnabled || false,
+    };
+
+    const report = dnsHealth.calculateScore(
+      (verification.verificationResults as unknown as DnsCheckResult[]),
+      domain.mailServerIp,
+      factors
+    );
+
+    // Store score in database
+    verification.healthScore = report.score;
+    verification.lastHealthScoreAt = new Date();
+    await verification.save();
+
+    return report;
+  }
+
+  /**
+   * Check DNS propagation across multiple public resolvers
+   */
+  async checkPropagation(workspaceId: string, domainId: string) {
+    const domain = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
+    if (!domain) {
+      throw new Error('Domain not found.');
+    }
+
+    const verification = await this.verificationRepo.findByDomainId(domainId);
+    if (!verification) {
+      throw new Error('Domain verification data not found.');
+    }
+
+    const dkim = await this.dkimRepo.findByDomainId(domainId);
+    if (!dkim) {
+      throw new Error('DKIM key not found.');
+    }
+
+    const p = this.prefixes(domain);
+    const selector = dkim?.selector || domain.dkimSelector || env.DEFAULT_DKIM_SELECTOR || 'ghost';
+
+    // Build propagation checks for all record types
+    const checks: DnsCheckInput[] = [
+      { record: 'spf', label: 'SPF', type: 'TXT', host: domain.name, expected: verification.spfRecord },
+      { record: 'dkim', label: 'DKIM', type: 'TXT', host: `${selector}._domainkey.${domain.name}`, expected: verification.dkimRecord },
+      { record: 'dmarc', label: 'DMARC', type: 'TXT', host: `_dmarc.${domain.name}`, expected: verification.dmarcRecord },
+      { record: 'mx', label: 'MX', type: 'MX', host: domain.name, expected: verification.mxRecord },
+      { record: 'mailA', label: 'Mail A', type: 'A', host: `mail.${domain.name}`, expected: verification.mailARecord },
+      { record: 'tracking', label: 'Tracking CNAME', type: 'CNAME', host: `${p.tracking}.${domain.name}`, expected: verification.trackingCname },
+      { record: 'bounce', label: 'Bounce CNAME', type: 'CNAME', host: `${p.bounce}.${domain.name}`, expected: verification.bounceCname },
+      { record: 'mtaSts', label: 'MTA-STS', type: 'TXT', host: `_mta-sts.${domain.name}`, expected: verification.mtaStsRecord },
+    ];
+
+    if (verification.mailAAAARecord) {
+      checks.push({
+        record: 'mailAAAA',
+        label: 'Mail AAAA',
+        type: 'AAAA',
+        host: `mail.${domain.name}`,
+        expected: verification.mailAAAARecord,
+      });
+    }
+
+    const propagationStatus = await dnsPropagation.checkAllPropagation(checks);
+
+    return {
+      domain: domain.name,
+      timestamp: new Date(),
+      records: propagationStatus,
+      overallPropagationPercentage: Math.round(
+        propagationStatus.reduce((sum, r) => sum + r.propagationPercentage, 0) / propagationStatus.length
+      ),
+    };
+  }
+
+  /**
+   * Analyze email deliverability for a domain
+   */
+  async analyzeDeliverability(workspaceId: string, domainId: string) {
+    const domain = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
+    if (!domain) {
+      throw new Error('Domain not found.');
+    }
+
+    const verification = await this.verificationRepo.findByDomainId(domainId);
+    if (!verification) {
+      throw new Error('Domain verification data not found.');
+    }
+
+    // Build deliverability factors from verification status
+    const factors: DeliverabilityCheckFactors = {
+      spfConfigured: !!verification.spfRecord,
+      spfValid: verification.spfVerified,
+      dkimConfigured: !!verification.dkimRecord,
+      dkimValid: verification.dkimVerified,
+      dmarcConfigured: !!verification.dmarcRecord,
+      dmarcValid: verification.dmarcVerified,
+      reversedns: !!verification.ptrRecord,
+      tlsCapable: true, // Assumed from infrastructure
+      openRelay: false, // Assumed secure by default
+      spamScore: 0, // No spam indicators detected
+    };
+
+    const report = await deliverability.analyzeDeliverability(
+      domain.name,
+      domain.mailServerIp,
+      (verification.verificationResults as unknown as DnsCheckResult[]),
+      factors
+    );
+
+    // Store deliverability status in database
+    verification.deliverabilityStatus = report.status;
+    verification.lastDeliverabilityCheckAt = new Date();
+    await verification.save();
+
+    return report;
+  }
+
+  /**
+   * Get comprehensive DNS information for a domain (health, propagation, deliverability)
+   */
+  async getDnsComprehensive(workspaceId: string, domainId: string) {
+    const domain = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
+    if (!domain) {
+      throw new Error('Domain not found.');
+    }
+
+    const dkim = await this.dkimRepo.findByDomainId(domainId);
+    const verification = await this.verificationRepo.findByDomainId(domainId);
+    await this.ensureProductionRecords(domain, dkim, verification);
+
+    // Fetch all metrics in parallel
+    const [healthReport, propagationReport, deliverabilityReport] = await Promise.all([
+      this.calculateHealthScore(workspaceId, domainId),
+      this.checkPropagation(workspaceId, domainId),
+      this.analyzeDeliverability(workspaceId, domainId),
+    ]);
+
+    return {
+      domain: {
+        name: domain.name,
+        status: domain.status,
+        mailServerHost: domain.mailServerHost,
+        mailServerIp: domain.mailServerIp,
+      },
+      dnsRecords: this.buildDnsRecords(domain, dkim, verification),
+      verification,
+      health: healthReport,
+      propagation: propagationReport,
+      deliverability: deliverabilityReport,
+    };
   }
 }

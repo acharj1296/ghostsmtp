@@ -19,6 +19,18 @@ export interface IDomainVerification extends Document {
   mailFrom: string;
   dmarcPolicy: 'none' | 'quarantine' | 'reject';
 
+  // New production-grade DNS records
+  mailARecord: string;
+  mailAAAARecord?: string;
+  smtpCname: string;
+  imapCname: string;
+  pop3Cname: string;
+  webmailCname: string;
+  mtaStsRecord: string;
+  tlsRptRecord: string;
+  caaRecord?: string;
+  bimiRecord?: string;
+
   // Verification status
   spfVerified: boolean;
   dkimVerified: boolean;
@@ -31,11 +43,31 @@ export interface IDomainVerification extends Document {
   autoconfigVerified: boolean;
   autodiscoverVerified: boolean;
 
+  // New verification status flags
+  mailAVerified: boolean;
+  mailAAAAVerified: boolean;
+  smtpVerified: boolean;
+  imapVerified: boolean;
+  pop3Verified: boolean;
+  webmailVerified: boolean;
+  mtaStsVerified: boolean;
+  tlsRptVerified: boolean;
+  caaVerified: boolean;
+  bimiVerified: boolean;
+
+  // DNS health and deliverability metrics
+  healthScore?: number; // 0-100
+  deliverabilityStatus?: 'excellent' | 'good' | 'needs_improvement' | 'critical';
+  dnssecEnabled?: boolean;
+  ptrRecord?: string;
+
   // Detailed verification output
   verificationResults?: Record<string, any>[];
   verificationErrors?: string[];
 
   lastVerifiedAt?: Date;
+  lastHealthScoreAt?: Date;
+  lastDeliverabilityCheckAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +89,18 @@ const DomainVerificationSchema = new Schema<IDomainVerification>(
     mailFrom: { type: String, default: '' },
     dmarcPolicy: { type: String, default: 'none', enum: ['none', 'quarantine', 'reject'] },
 
+    // New production-grade DNS records
+    mailARecord: { type: String, default: '' },
+    mailAAAARecord: { type: String, default: '' },
+    smtpCname: { type: String, default: '' },
+    imapCname: { type: String, default: '' },
+    pop3Cname: { type: String, default: '' },
+    webmailCname: { type: String, default: '' },
+    mtaStsRecord: { type: String, default: '' },
+    tlsRptRecord: { type: String, default: '' },
+    caaRecord: { type: String, default: '' },
+    bimiRecord: { type: String, default: '' },
+
     spfVerified: { type: Boolean, required: true, default: false },
     dkimVerified: { type: Boolean, required: true, default: false },
     dmarcVerified: { type: Boolean, required: true, default: false },
@@ -68,9 +112,29 @@ const DomainVerificationSchema = new Schema<IDomainVerification>(
     autoconfigVerified: { type: Boolean, required: true, default: false },
     autodiscoverVerified: { type: Boolean, required: true, default: false },
 
+    // New verification status flags
+    mailAVerified: { type: Boolean, required: true, default: false },
+    mailAAAAVerified: { type: Boolean, required: true, default: false },
+    smtpVerified: { type: Boolean, required: true, default: false },
+    imapVerified: { type: Boolean, required: true, default: false },
+    pop3Verified: { type: Boolean, required: true, default: false },
+    webmailVerified: { type: Boolean, required: true, default: false },
+    mtaStsVerified: { type: Boolean, required: true, default: false },
+    tlsRptVerified: { type: Boolean, required: true, default: false },
+    caaVerified: { type: Boolean, required: true, default: false },
+    bimiVerified: { type: Boolean, required: true, default: false },
+
+    // DNS health and deliverability metrics
+    healthScore: { type: Number, min: 0, max: 100 },
+    deliverabilityStatus: { type: String, enum: ['excellent', 'good', 'needs_improvement', 'critical'] },
+    dnssecEnabled: { type: Boolean, default: false },
+    ptrRecord: { type: String, default: '' },
+
     verificationResults: { type: [Schema.Types.Mixed], default: [] },
     verificationErrors: { type: [String], default: [] },
     lastVerifiedAt: { type: Date },
+    lastHealthScoreAt: { type: Date },
+    lastDeliverabilityCheckAt: { type: Date },
   },
   {
     timestamps: true,

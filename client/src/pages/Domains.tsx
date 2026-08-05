@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { Dialog } from '../components/ui/dialog';
 import { Notification } from '../components/ui/notification';
 import { DnsRecordCard } from '../components/DnsRecordCard';
+import { DnsTabs } from '../components/DnsTabs';
 import {
   Globe,
   Plus,
@@ -739,6 +740,17 @@ export const Domains = () => {
           )}
         </div>
       </div>
+
+      {/* Comprehensive DNS analysis: health, propagation, deliverability */}
+      {selectedDomainId && domainDetails?.domain?.name && (
+        <div className="space-y-6">
+          <DnsTabs
+            domainId={selectedDomainId}
+            domainName={domainDetails.domain.name}
+            onCopy={copyToClipboard}
+          />
+        </div>
+      )}
 
       {/* Create Modal */}
       <Dialog isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Register Send Domain">

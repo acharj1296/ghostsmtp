@@ -42,6 +42,9 @@ const envSchema = z.object({
   // If not set, the system will attempt DNS resolution of MAIL_SERVER_HOST.
   MAIL_SERVER_IP: z.string().optional(),
 
+  // Public IPv6 address of the mail server (used in SPF and AAAA records).
+  MAIL_SERVER_IPV6: z.string().optional(),
+
   // Base domain for hosted mail services (tracking, bounce, autoconfig, etc.).
   MAIL_BASE_DOMAIN: z.string().default('ghostsmtp.com'),
 
@@ -63,6 +66,18 @@ const envSchema = z.object({
   // DMARC aggregate/abuse report addresses (per RFC — must be pre-created mailboxes).
   DMARC_RUA: z.string().default('dmarc-rua@ghostsmtp.com'),
   DMARC_RUF: z.string().default('dmarc-ruf@ghostsmtp.com'),
+
+  // MTA-STS policy ID (timestamp-based unique identifier).
+  MTA_STS_ID: z.string().optional(),
+
+  // TLS-RPT reporting email address.
+  TLS_RPT_EMAIL: z.string().optional(),
+
+  // CAA record for certificate authority authorization (e.g., '0 issue "letsencrypt.org"').
+  CAA_RECORD: z.string().optional(),
+
+  // BIMI logo URL for brand indicators.
+  BIMI_LOGO_URL: z.string().optional(),
 
   // Path where OpenDKIM containers mount key files (shared volume).
   DKIM_KEYS_PATH: z.string().default('/etc/opendkim/keys'),

@@ -13,6 +13,7 @@ import emailRouter from './routes/email.routes';
 import webhookRouter from './routes/webhook.routes';
 import profileRouter from './routes/profile.routes';
 import templateRouter from './routes/template.routes';
+import mtaStsRouter from './routes/mtaSts.routes';
 
 const app = express();
 
@@ -52,6 +53,11 @@ app.use('/api/v1/emails', emailRouter);
 app.use('/api/v1/webhooks', webhookRouter);
 app.use('/api/v1/profile', profileRouter);
 app.use('/api/v1/templates', templateRouter);
+
+// MTA-STS Policy endpoint (served at .well-known for email TLS enforcement)
+// Must be accessible via HTTPS at: https://mta-sts.<domain>/.well-known/mta-sts.txt
+app.use('/', mtaStsRouter);
+
 app.use(errorHandler);
 
 // Health Check Endpoint (Includes MongoDB status check)

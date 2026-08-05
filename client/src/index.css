@@ -26,3 +26,60 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 92, 246, 0.6);
 }
+
+/* Drawer & modal animations */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-in-bottom {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes copy-flash {
+  0% { background-color: rgba(16, 185, 129, 0.15); }
+  100% { background-color: transparent; }
+}
+
+@keyframes ring-fill {
+  from { stroke-dashoffset: var(--ring-circumference); }
+  to { stroke-dashoffset: var(--ring-target); }
+}
+
+.animate-slide-in-right { animation: slide-in-right 0.2s ease-out; }
+.animate-slide-in-bottom { animation: slide-in-bottom 0.15s ease-out; }
+.animate-fade-in { animation: fade-in 0.15s ease-out; }
+.animate-scale-in { animation: scale-in 0.15s ease-out; }
+.animate-copy-flash { animation: copy-flash 0.5s ease-out; }
+
+/* Centered modal wizard animations */
+@keyframes modal-in {
+  from { transform: scale(0.96) translateY(10px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes step-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 10px 30px -10px rgba(139, 92, 246, 0.55); }
+  50% { box-shadow: 0 10px 42px -6px rgba(139, 92, 246, 0.85); }
+}
+
+.animate-modal-in { animation: modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.animate-step-in { animation: step-in 0.25s ease-out; }
+.animate-glow-pulse { animation: glow-pulse 2.4s ease-in-out infinite; }

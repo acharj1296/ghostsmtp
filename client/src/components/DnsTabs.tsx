@@ -18,7 +18,7 @@ export const DnsTabs = ({ domainId, domainName, onCopy }: DnsTabsProps) => {
   const [activeTab, setActiveTab] = useState('records');
 
   // Fetch comprehensive DNS data
-  const { data: dnsData, isLoading: dnsLoading, refetch: refetchDns } = useQuery({
+  const { data: dnsData, isLoading: dnsLoading } = useQuery({
     queryKey: ['dns-comprehensive', domainId],
     queryFn: async () => {
       const res = await apiClient.get(`/domains/${domainId}/dns-comprehensive`);
@@ -60,7 +60,7 @@ export const DnsTabs = ({ domainId, domainName, onCopy }: DnsTabsProps) => {
   const buildRecordsList = () => {
     if (!dnsData?.dnsRecords) return [];
 
-    const records = [];
+    const records: any[] = [];
     const recordData = dnsData.dnsRecords;
 
     // Add all record types

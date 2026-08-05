@@ -1,183 +1,202 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
+import { lazy, Suspense, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table';
-import { Badge } from '../components/ui/badge';
-import { TrendingUp, Globe, ShieldAlert, RefreshCw } from 'lucide-react';
+import {
+  useDashboardStats,
+  useEmailLogs,
+  useDomains,
+  useSmtpCredentials,
+  useApiKeys,
+  useSystemHealth,
+  groupLogsByDay,
+  computeDeliverability,
+  buildActivityTimeline,
+} from '../hooks/useDashboardData';
+import {
+  buildDomainHealth,
+  buildQueueSnapshot,
+  buildInfrastructure,
+  buildDeliverabilityFactors,
+  buildNotifications,
+} from '../hooks/useDashboardDerivations';
+import {
+  Section,
+  WorkspaceHeader,
+  KpiGrid,
+  ActionCenter,
+  DomainHealth,
+  MailQueue,
+  Infrastructure,
+  DeliverabilityCenter,
+  ActivityTimeline,
+  RecentEmails,
+  NotificationCenter,
+  AiInsights,
+  buildDeliveryChartData,
+  ChartSkeleton,
+} from '../components/dashboard';
+import type { OverallHealth } from '../components/dashboard';
+import { Globe, Server, ShieldCheck } from 'lucide-react';
+
+// Lazy-load the heavy analytics chart so it doesn't block first paint.
+const DeliveryAnalytics = lazy(() =>
+  import('../components/dashboard/DeliveryAnalytics').then((m) => ({ default: m.DeliveryAnalytics })),
+);
 
 export const Dashboard = () => {
-  const { activeWorkspace } = useWorkspace();
+  const navigate = useNavigate();
+  const { activeWorkspace, loading: wsLoading } = useWorkspace();
+  const enabled = !!activeWorkspace?.id && !wsLoading;
 
-  // Queries
-  const { data: stats = { sent: 0, delivered: 0, bounced: 0, failed: 0, queued: 0 }, isLoading: isStatsLoading, refetch: refetchStats } = useQuery({
-    queryKey: ['dashboard-stats', activeWorkspace?.id],
-    queryFn: async () => {
-      const res = await apiClient.get('/emails/stats');
-      return res.data;
-    },
-    enabled: !!activeWorkspace?.id,
-  });
+  // ── Queries ──────────────────────────────────────────────────────────────
+  const statsQuery = useDashboardStats(enabled);
+  const logsQuery = useEmailLogs(enabled);
+  const domainsQuery = useDomains(enabled);
+  const credsQuery = useSmtpCredentials(enabled);
+  const apiKeysQuery = useApiKeys(enabled);
+  const healthQuery = useSystemHealth(enabled);
 
-  const { data: domains = [], isLoading: isDomainsLoading } = useQuery({
-    queryKey: ['domains', activeWorkspace?.id],
-    queryFn: async () => {
-      const res = await apiClient.get('/domains');
-      return res.data;
-    },
-    enabled: !!activeWorkspace?.id,
-  });
+  const stats = statsQuery.data;
+  const logs = useMemo(() => logsQuery.data || [], [logsQuery.data]);
+  const domains = useMemo(() => domainsQuery.data || [], [domainsQuery.data]);
+  const credentials = useMemo(() => credsQuery.data || [], [credsQuery.data]);
+  const apiKeys = useMemo(() => apiKeysQuery.data || [], [apiKeysQuery.data]);
 
-  const { data: recentLogs = [], isLoading: isLogsLoading } = useQuery({
-    queryKey: ['email-logs-recent', activeWorkspace?.id],
-    queryFn: async () => {
-      const res = await apiClient.get('/emails');
-      return res.data.slice(0, 5); // display only top 5 recent logs
-    },
-    enabled: !!activeWorkspace?.id,
-  });
+  const loading = statsQuery.isLoading || logsQuery.isLoading || domainsQuery.isLoading;
 
-  const verifiedDomainsCount = domains.filter((d: any) => d.status === 'verified').length;
-  
-  // Calculate Bounce Rate %
-  const totalSent = stats.sent || 0;
-  const totalBounced = stats.bounced || 0;
-  const bounceRate = totalSent > 0 ? ((totalBounced / totalSent) * 100).toFixed(2) : '0.00';
+  // ── Derived metrics ────────────────────────────────────────────────────────
+  const totalProcessed =
+    (stats?.sent || 0) + (stats?.delivered || 0) + (stats?.bounced || 0) + (stats?.failed || 0);
+  const bounceRate = totalProcessed > 0 ? ((stats?.bounced || 0) / totalProcessed) * 100 : 0;
+  const complaints = useMemo(() => logs.filter((l) => l.status === 'complained').length, [logs]);
+  const complaintRate = totalProcessed > 0 ? (complaints / totalProcessed) * 100 : 0;
 
-  const handleRefreshAll = () => {
-    refetchStats();
-  };
+  const { score: delivScore, grade: delivGrade } = useMemo(
+    () => computeDeliverability(stats || { sent: 0, delivered: 0, bounced: 0, failed: 0, queued: 0 }),
+    [stats],
+  );
 
+  const chartData = useMemo(
+    () => buildDeliveryChartData(groupLogsByDay(logs, 30)),
+    [logs],
+  );
+
+  const domainRows = useMemo(() => buildDomainHealth(domains), [domains]);
+  const queue = useMemo(() => buildQueueSnapshot(logs), [logs]);
+  const services = useMemo(
+    () => buildInfrastructure(healthQuery.data, queue),
+    [healthQuery.data, queue],
+  );
+  const factors = useMemo(
+    () => buildDeliverabilityFactors(domains, bounceRate, complaintRate),
+    [domains, bounceRate, complaintRate],
+  );
+  const notifications = useMemo(
+    () => buildNotifications(domains, logs, bounceRate, complaintRate, healthQuery.data),
+    [domains, logs, bounceRate, complaintRate, healthQuery.data],
+  );
+  const activityItems = useMemo(
+    () => buildActivityTimeline(logs, domains, credentials, apiKeys),
+    [logs, domains, credentials, apiKeys],
+  );
+
+  // ── Overall workspace health ─────────────────────────────────────────────────
+  const overallHealth: OverallHealth = useMemo(() => {
+    if (healthQuery.data && healthQuery.data.status !== 'healthy') return 'down';
+    if (bounceRate >= 5 || domains.some((d) => d.status === 'failed')) return 'degraded';
+    return 'healthy';
+  }, [healthQuery.data, bounceRate, domains]);
+
+  const healthLabel =
+    overallHealth === 'healthy'
+      ? 'All systems operational'
+      : overallHealth === 'degraded'
+        ? 'Attention needed'
+        : 'Service degraded';
+
+  const goSend = () => navigate('/send-email');
+
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Workspace Overview</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">
-            Active Workspace: <span className="font-semibold text-brand-600 dark:text-brand-400">{activeWorkspace?.name || 'Default Workspace'}</span>
-          </p>
-        </div>
-        <Button variant="outline" onClick={handleRefreshAll} className="flex items-center gap-2 self-start sm:self-auto">
-          <RefreshCw className="w-4 h-4" />
-          Refresh Stats
-        </Button>
+    <div className="space-y-8">
+      {/* Section 1 — Workspace Header */}
+      <WorkspaceHeader
+        workspaceName={activeWorkspace?.name || 'Workspace'}
+        plan={activeWorkspace?.plan || 'free'}
+        health={overallHealth}
+        healthLabel={healthLabel}
+      />
+
+      {/* Section 2 — Primary KPIs */}
+      <KpiGrid stats={stats} logs={logs} domains={domains} loading={loading} />
+
+      {/* Section 3 — Action Center */}
+      <ActionCenter />
+
+      {/* Section 4 — Domain Health */}
+      <Section
+        title="Domain Health"
+        description="Authentication and delivery posture per sending domain"
+        icon={<Globe className="h-5 w-5" />}
+      >
+        <DomainHealth rows={domainRows} loading={domainsQuery.isLoading} />
+      </Section>
+
+      {/* Section 5 — Delivery Analytics */}
+      <Suspense fallback={<ChartSkeleton height={420} />}>
+        <DeliveryAnalytics data={chartData} loading={loading} onSendTest={goSend} />
+      </Suspense>
+
+      {/* Section 6 + 11 — Mail Queue + Notifications */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <MailQueue queue={queue} loading={loading} />
+        <NotificationCenter notifications={notifications} loading={loading} />
       </div>
 
-      {/* Grid items */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle>Sent Volume</CardTitle>
-              <CardDescription>All outbound messages</CardDescription>
-            </div>
-            <TrendingUp className="w-5 h-5 text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            {isStatsLoading ? (
-              <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">{stats.sent}</div>
-                <span className="text-xs text-slate-400 mt-1 block">Queue Status: {stats.queued} sending</span>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      {/* Section 7 — Infrastructure */}
+      <Section
+        title="SMTP Infrastructure"
+        description="Live status, latency and heartbeat across platform services"
+        icon={<Server className="h-5 w-5" />}
+      >
+        <Infrastructure services={services} loading={healthQuery.isLoading} />
+      </Section>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle>Active Domains</CardTitle>
-              <CardDescription>Verified sending hosts</CardDescription>
-            </div>
-            <Globe className="w-5 h-5 text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            {isDomainsLoading ? (
-              <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">{verifiedDomainsCount} / {domains.length}</div>
-                <span className="text-xs text-slate-400 mt-1 block">Pending DNS resolve checks</span>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      {/* Section 8 — Deliverability Center */}
+      <Section
+        title="Deliverability Center"
+        description="Authentication, reputation and transport security signals"
+        icon={<ShieldCheck className="h-5 w-5" />}
+      >
+        <DeliverabilityCenter
+          factors={factors}
+          overallScore={delivScore}
+          grade={delivGrade}
+          loading={loading}
+        />
+      </Section>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle>Bounce Rate</CardTitle>
-              <CardDescription>Delivery health metrics</CardDescription>
-            </div>
-            <ShieldAlert className="w-5 h-5 text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            {isStatsLoading ? (
-              <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">{bounceRate}%</div>
-                <span className="text-xs text-slate-400 mt-1 block">Total Bounced: {stats.bounced}</span>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      {/* Section 9 + 12 — Activity Timeline + AI Recommendations
+          (both components render their own headers) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Section className="lg:col-span-1">
+          <ActivityTimeline items={activityItems} loading={loading} />
+        </Section>
+        <Section className="lg:col-span-2">
+          <AiInsights
+            stats={stats}
+            domains={domains}
+            credentials={credentials}
+            logs={logs}
+            loading={loading}
+          />
+        </Section>
       </div>
 
-      {/* Recent Activity Feed */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity Feed</CardTitle>
-          <CardDescription>Outbound SMTP transactional logs</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLogsLoading ? (
-            <div className="h-[150px] flex items-center justify-center text-slate-500 gap-2">
-              <RefreshCw className="w-5 h-5 animate-spin" />
-              Loading feed...
-            </div>
-          ) : recentLogs.length === 0 ? (
-            <div className="h-[150px] flex items-center justify-center text-slate-400 text-sm">
-              No recent logs found. Send transactional emails to populate statistics.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Recipient</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentLogs.map((log: any) => (
-                  <TableRow key={log._id}>
-                    <TableCell className="font-semibold text-slate-900 dark:text-white text-xs">{log.recipient}</TableCell>
-                    <TableCell className="text-slate-600 dark:text-slate-300 text-xs font-medium truncate max-w-[250px]">{log.subject}</TableCell>
-                    <TableCell>
-                      <Badge variant={
-                        log.status === 'delivered' || log.status === 'sent' ? 'success' :
-                        log.status === 'queued' || log.status === 'processing' ? 'info' :
-                        log.status === 'deferred' ? 'warning' : 'error'
-                      }>
-                        {log.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-slate-500 text-xs font-mono">
-                      {new Date(log.createdAt).toLocaleTimeString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {/* Section 10 — Recent Emails (renders its own header) */}
+      <Section>
+        <RecentEmails logs={logs} loading={loading} />
+      </Section>
     </div>
   );
 };

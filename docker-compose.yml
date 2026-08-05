@@ -156,8 +156,10 @@ services:
     restart: unless-stopped
 
     environment:
-      MAIL_HOSTNAME: mail.ghosthosting.qzz.io
-      MAIL_DOMAIN: ghosthosting.qzz.io
+      # MAIL_HOSTNAME = the server customers point MX/HELO at; MAIL_DOMAIN =
+      # the provider base domain. Shared with the api/worker via the same vars.
+      MAIL_HOSTNAME: ${MAIL_SERVER_HOST:-mail.ghosthosting.qzz.io}
+      MAIL_DOMAIN: ${MAIL_BASE_DOMAIN:-ghosthosting.qzz.io}
       RELAY_NETWORK: 10.10.0.0/24
 
     ports:
@@ -185,8 +187,12 @@ services:
     build: ./docker/mail/opendkim
     container_name: ghostsmtp-opendkim
     restart: unless-stopped
+    # Shared DKIM volume: the API/worker containers write generated keys and
+    # update KeyTable/SigningTable here; this container's milter reads them.
     volumes:
-      - opendkim_keys:/etc/opendkim/keys
+      - ./docker/mail/opendkim/keys:/etc/opendkim/keys
+      - ./docker/mail/opendkim/KeyTable:/etc/opendkim/KeyTable
+      - ./docker/mail/opendkim/SigningTable:/etc/opendkim/SigningTable
     networks:
       - mail-network
     healthcheck:
@@ -242,6 +248,25 @@ services:
       SMTP_PORT: 25
       INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-dev-internal-token}
       TRUST_PROXY_HOPS: "1"
+      # --- Mail infrastructure (drives real DNS record generation) ---
+      MAIL_SERVER_HOST: ${MAIL_SERVER_HOST:-mail.ghosthosting.qzz.io}
+      MAIL_SERVER_IP: ${MAIL_SERVER_IP:-}
+      MAIL_BASE_DOMAIN: ${MAIL_BASE_DOMAIN:-ghosthosting.qzz.io}
+      TRACKING_SUBDOMAIN: ${TRACKING_SUBDOMAIN:-track}
+      BOUNCE_SUBDOMAIN: ${BOUNCE_SUBDOMAIN:-bounce}
+      AUTOCONFIG_SUBDOMAIN: ${AUTOCONFIG_SUBDOMAIN:-autoconfig}
+      DEFAULT_DKIM_SELECTOR: ${DEFAULT_DKIM_SELECTOR:-ghost}
+      DKIM_KEY_SIZE: ${DKIM_KEY_SIZE:-2048}
+      DMARC_RUA: ${DMARC_RUA:-dmarc-rua@ghosthosting.qzz.io}
+      DMARC_RUF: ${DMARC_RUF:-dmarc-ruf@ghosthosting.qzz.io}
+      DKIM_KEYS_PATH: /etc/opendkim/keys
+      DKIM_KEYTABLE_PATH: /etc/opendkim/KeyTable
+      DKIM_SIGNINGTABLE_PATH: /etc/opendkim/SigningTable
+
+    volumes:
+      - ./docker/mail/opendkim/keys:/etc/opendkim/keys
+      - ./docker/mail/opendkim/KeyTable:/etc/opendkim/KeyTable
+      - ./docker/mail/opendkim/SigningTable:/etc/opendkim/SigningTable
 
     depends_on:
       db:
@@ -278,6 +303,25 @@ services:
       SMTP_PORT: 25
       INTERNAL_AUTH_TOKEN: ${INTERNAL_AUTH_TOKEN:-dev-internal-token}
       TRUST_PROXY_HOPS: "1"
+      # --- Mail infrastructure (mirrors api so DKIM keys stay in sync) ---
+      MAIL_SERVER_HOST: ${MAIL_SERVER_HOST:-mail.ghosthosting.qzz.io}
+      MAIL_SERVER_IP: ${MAIL_SERVER_IP:-}
+      MAIL_BASE_DOMAIN: ${MAIL_BASE_DOMAIN:-ghosthosting.qzz.io}
+      TRACKING_SUBDOMAIN: ${TRACKING_SUBDOMAIN:-track}
+      BOUNCE_SUBDOMAIN: ${BOUNCE_SUBDOMAIN:-bounce}
+      AUTOCONFIG_SUBDOMAIN: ${AUTOCONFIG_SUBDOMAIN:-autoconfig}
+      DEFAULT_DKIM_SELECTOR: ${DEFAULT_DKIM_SELECTOR:-ghost}
+      DKIM_KEY_SIZE: ${DKIM_KEY_SIZE:-2048}
+      DMARC_RUA: ${DMARC_RUA:-dmarc-rua@ghosthosting.qzz.io}
+      DMARC_RUF: ${DMARC_RUF:-dmarc-ruf@ghosthosting.qzz.io}
+      DKIM_KEYS_PATH: /etc/opendkim/keys
+      DKIM_KEYTABLE_PATH: /etc/opendkim/KeyTable
+      DKIM_SIGNINGTABLE_PATH: /etc/opendkim/SigningTable
+
+    volumes:
+      - ./docker/mail/opendkim/keys:/etc/opendkim/keys
+      - ./docker/mail/opendkim/KeyTable:/etc/opendkim/KeyTable
+      - ./docker/mail/opendkim/SigningTable:/etc/opendkim/SigningTable
 
     command: ["npm", "run", "start:worker:email"]
 

@@ -86,5 +86,20 @@ export class DomainController {
       return res.status(400).json({ error: error.message });
     }
   }
+
+  async regenerateDkim(req: Request, res: Response) {
+    const workspaceId = req.workspaceId;
+    const { id } = req.params;
+    if (!workspaceId) {
+      return res.status(400).json({ error: 'Missing X-Workspace-ID header context.' });
+    }
+
+    try {
+      const result = await domainService.regenerateDkim(workspaceId, id);
+      return res.status(200).json(result);
+    } catch (error: any) {
+      return res.status(400).json({ error: error.message });
+    }
+  }
 }
 export default DomainController;

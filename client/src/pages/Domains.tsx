@@ -8,6 +8,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Badge } from '../components/ui/badge';
 import { Dialog } from '../components/ui/dialog';
 import { Notification } from '../components/ui/notification';
+import { DnsRecordCard } from '../components/DnsRecordCard';
 import {
   Globe,
   Plus,
@@ -648,6 +649,71 @@ export const Domains = () => {
 
                             </div>
                         </div>
+
+                        {/* --- Extended production DNS records (from backend) --- */}
+                        <div className="space-y-1">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Tracking & Bounce</span>
+                          <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-3 rounded-lg text-xs space-y-2">
+                            <DnsRecordCard
+                              title="Tracking CNAME"
+                              type="CNAME"
+                              host={domainDetails?.dnsRecords?.tracking?.host}
+                              value={domainDetails?.dnsRecords?.tracking?.value}
+                              verified={domainDetails?.verification?.trackingVerified}
+                              onCopy={copyToClipboard}
+                            />
+                            <DnsRecordCard
+                              title="Bounce CNAME"
+                              type="CNAME"
+                              host={domainDetails?.dnsRecords?.bounce?.host}
+                              value={domainDetails?.dnsRecords?.bounce?.value}
+                              verified={domainDetails?.verification?.bounceVerified}
+                              onCopy={copyToClipboard}
+                            />
+                            <DnsRecordCard
+                              title="Return-Path (MAIL FROM)"
+                              type="CNAME"
+                              host={domainDetails?.dnsRecords?.returnPath?.host}
+                              value={domainDetails?.dnsRecords?.returnPath?.value}
+                              verified={domainDetails?.verification?.returnPathVerified}
+                              onCopy={copyToClipboard}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Email Client Autoconfig</span>
+                          <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-3 rounded-lg text-xs space-y-2">
+                            <DnsRecordCard
+                              title="Autoconfig CNAME"
+                              type="CNAME"
+                              host={domainDetails?.dnsRecords?.autoconfig?.host}
+                              value={domainDetails?.dnsRecords?.autoconfig?.value}
+                              verified={domainDetails?.verification?.autoconfigVerified}
+                              onCopy={copyToClipboard}
+                            />
+                            <DnsRecordCard
+                              title="Autodiscover SRV"
+                              type="SRV"
+                              host={domainDetails?.dnsRecords?.autodiscover?.host}
+                              value={domainDetails?.dnsRecords?.autodiscover?.value}
+                              verified={domainDetails?.verification?.autodiscoverVerified}
+                              onCopy={copyToClipboard}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Verification status / detailed errors */}
+                        {domainDetails?.verification?.verificationErrors?.length > 0 && (
+                          <div className="rounded-xl border border-amber-700/50 bg-amber-900/10 p-4 space-y-2">
+                            <h3 className="font-semibold text-sm text-amber-200">Verification Details</h3>
+                            <ul className="text-xs text-amber-100/90 space-y-1 list-disc list-inside">
+                              {(domainDetails?.verification?.verificationErrors || []).map((e: string, i: number) => (
+                                <li key={i}>{e}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
                     </div>
 

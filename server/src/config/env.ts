@@ -30,6 +30,50 @@ const envSchema = z.object({
   // Rate limiting (Redis-backed fixed window).
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
   RATE_LIMIT_IP_MAX: z.coerce.number().default(200),
+
+  // --- Mail Infrastructure Configuration ---
+  // The public hostname that Postfix uses as its HELO/MX identity.
+  // This is the hostname customers point their MX records to.
+  MAIL_SERVER_HOST: z
+    .string()
+    .default(process.env.MAIL_HOSTNAME ?? 'mail.ghostsmtp.com'),
+
+  // Public IP address of the mail server (used in SPF records).
+  // If not set, the system will attempt DNS resolution of MAIL_SERVER_HOST.
+  MAIL_SERVER_IP: z.string().optional(),
+
+  // Base domain for hosted mail services (tracking, bounce, autoconfig, etc.).
+  MAIL_BASE_DOMAIN: z.string().default('ghostsmtp.com'),
+
+  // Subdomain prefix for tracking opens/clicks.
+  TRACKING_SUBDOMAIN: z.string().default('track'),
+
+  // Subdomain prefix for bounce/VERP handling.
+  BOUNCE_SUBDOMAIN: z.string().default('bounce'),
+
+  // Subdomain prefix for autoconfig (Thunderbird, Apple Mail).
+  AUTOCONFIG_SUBDOMAIN: z.string().default('autoconfig'),
+
+  // Default DKIM selector used for new domains.
+  DEFAULT_DKIM_SELECTOR: z.string().default('ghost'),
+
+  // DKIM key size (2048 recommended for production).
+  DKIM_KEY_SIZE: z.coerce.number().default(2048),
+
+  // DMARC aggregate/abuse report addresses (per RFC — must be pre-created mailboxes).
+  DMARC_RUA: z.string().default('dmarc-rua@ghostsmtp.com'),
+  DMARC_RUF: z.string().default('dmarc-ruf@ghostsmtp.com'),
+
+  // Path where OpenDKIM containers mount key files (shared volume).
+  DKIM_KEYS_PATH: z.string().default('/etc/opendkim/keys'),
+
+  // KeyTable / SigningTable file paths (shared bind-mounts) so the API can
+  // register newly generated keys for signing.
+  DKIM_KEYTABLE_PATH: z.string().default('/etc/opendkim/KeyTable'),
+  DKIM_SIGNINGTABLE_PATH: z.string().default('/etc/opendkim/SigningTable'),
+
+  // Docker API socket (used by OpendedkimService to manage keys in containers).
+  DOCKER_HOST: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

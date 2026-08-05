@@ -18,7 +18,11 @@ COPY TrustedHosts /etc/opendkim/TrustedHosts
 # Set proper permissions
 RUN chmod 0644 /etc/opendkim/opendkim.conf /etc/opendkim/SigningTable /etc/opendkim/KeyTable /etc/opendkim/TrustedHosts
 
+# Entrypoint chowns the shared keys volume (written by the API container as
+# root) so the opendkim user can read newly generated keys.
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 12345
 
-# Start OpenDKIM in foreground
-CMD ["opendkim", "-f", "-v", "-x", "/etc/opendkim/opendkim.conf"]
+ENTRYPOINT ["/entrypoint.sh"]

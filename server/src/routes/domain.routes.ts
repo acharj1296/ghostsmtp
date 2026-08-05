@@ -13,5 +13,6 @@ router.get('/', controller.list);
 router.get('/:id', controller.getDetails);
 router.delete('/:id', controller.delete);
 router.post('/:id/verify', controller.verify);
+router.post('/:id/regenerate-dkim', controller.regenerateDkim);
 
 export default router;

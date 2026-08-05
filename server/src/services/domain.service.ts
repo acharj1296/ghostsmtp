@@ -1,16 +1,19 @@
 import { generateKeyPairSync } from 'crypto';
-import dns from 'dns';
-dns.setServers([
-  "1.1.1.1",
-  "8.8.8.8",
-]);
 import { DomainRepository } from '../repositories/domain.repository';
 import { DkimKeyRepository } from '../repositories/dkimKey.repository';
 import { DomainVerificationRepository } from '../repositories/domainVerification.repository';
+import { env } from '../config/env';
+import { DnsGeneratorService, DnsGenerationOptions, GeneratedDnsSet } from './dnsGenerator.service';
+import { DnsLookupService, DnsCheckInput } from './dnsLookup.service';
+import { OpenDkimService } from './opendkim.service';
+import { SecurityService } from './security.service';
 
+const dnsGenerator = new DnsGeneratorService();
+const dnsLookup = new DnsLookupService();
+const openDkim = new OpenDkimService();
 
-const dnsPromises = dns.promises;
-console.log(dns.getServers());
+/** Domain status when every sending-critical DNS check passes. */
+const REQUIRED_CHECKS = ['spf', 'dkim', 'dmarc', 'mx', 'tracking', 'returnPath'];
 
 export class DomainService {
   private domainRepo = new DomainRepository();
@@ -21,6 +24,103 @@ export class DomainService {
   private isValidDomain(domain: string): boolean {
     const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
     return domainRegex.test(domain);
+  }
+
+  private stripPublicKey(publicKey: string): string {
+    return publicKey
+      .replace(/-----BEGIN PUBLIC KEY-----/, '')
+      .replace(/-----END PUBLIC KEY-----/, '')
+      .replace(/\s+/g, '');
+  }
+
+  /** Encrypt the DKIM private key at rest; fall back to raw if no key configured. */
+  private encryptDkimKey(privateKeyPem: string): string {
+    try {
+      return SecurityService.encryptSecret(privateKeyPem);
+    } catch {
+      return privateKeyPem;
+    }
+  }
+
+  private generateKeyPair(keySize = env.DKIM_KEY_SIZE ?? 2048) {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+      modulusLength: keySize,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+    return { privateKey, formattedPublicKey: this.stripPublicKey(publicKey) };
+  }
+
+  /** Effective per-domain subdomain prefixes (domain config wins, else infra env). */
+  private prefixes(domain: any) {
+    const bounce = domain.bounceSubdomain || env.BOUNCE_SUBDOMAIN || 'bounce';
+    return {
+      tracking: domain.trackingSubdomain || env.TRACKING_SUBDOMAIN || 'track',
+      bounce,
+      returnPath: domain.returnPathSubdomain || bounce,
+      autoconfig: env.AUTOCONFIG_SUBDOMAIN || 'autoconfig',
+    };
+  }
+
+  private generationOptions(domain: any, selector?: string): DnsGenerationOptions {
+    const p = this.prefixes(domain);
+    return {
+      selector: selector ?? domain.dkimSelector ?? env.DEFAULT_DKIM_SELECTOR ?? 'ghost',
+      trackingPrefix: p.tracking,
+      bouncePrefix: p.bounce,
+      returnPathPrefix: p.returnPath,
+      autoconfigPrefix: p.autoconfig,
+      dmarcPolicy: domain.dmarcPolicy || 'none',
+    };
+  }
+
+  /** Persist the full generated DNS set onto a DomainVerification document. */
+  private applyGeneratedSet(verification: any, domain: any, dkim: any, set: GeneratedDnsSet): void {
+    verification.spfRecord = set.raw.spf;
+    verification.dkimRecord = set.raw.dkim;
+    verification.dmarcRecord = set.raw.dmarc;
+    verification.mxRecord = set.raw.mx;
+    verification.cnameRecord = set.raw.trackingCname; // backward-compatible alias
+    verification.trackingCname = set.raw.trackingCname;
+    verification.bounceCname = set.raw.bounceCname;
+    verification.returnPathRecord = set.raw.returnPath;
+    verification.autoconfigCname = set.raw.autoconfigCname;
+    verification.autodiscoverRecord = set.raw.autodiscoverRecord;
+    verification.mailFrom = set.raw.mailFrom;
+    verification.dmarcPolicy = domain.dmarcPolicy || 'none';
+  }
+
+  /**
+   * Upgrade a legacy domain (created before real DNS generation) to the full
+   * production record set, and sync its key to OpenDKIM. No-op for current
+   * domains. Ensures previously-created domains also get real records.
+   */
+  private async ensureProductionRecords(domain: any, dkim: any, verification: any): Promise<void> {
+    if (!dkim || !verification) return;
+    if (!verification.mailFrom) {
+      const set = dnsGenerator.generateForDomain(
+        domain.name,
+        dkim.publicKey,
+        this.generationOptions(domain, dkim.selector)
+      );
+      this.applyGeneratedSet(verification, domain, dkim, set);
+      await verification.save();
+    }
+    // Best-effort: make sure the key exists in the OpenDKIM container.
+    const privateKey = this.tryDecryptDkimKey(dkim.privateKey);
+    if (privateKey) {
+      await openDkim.syncDomain(domain.name, dkim.selector, privateKey);
+    }
+  }
+
+  private tryDecryptDkimKey(stored: string): string | null {
+    if (!stored) return null;
+    if (stored.includes('-----BEGIN')) return stored; // already plaintext
+    try {
+      return SecurityService.decryptSecret(stored);
+    } catch {
+      return null;
+    }
   }
 
   async createDomain(workspaceId: string, name: string) {
@@ -43,52 +143,59 @@ export class DomainService {
       // If it exists in the workspace, fetch details and return
       const dkim = await this.dkimRepo.findByDomainId(domain.id);
       const verification = await this.verificationRepo.findByDomainId(domain.id);
+      await this.ensureProductionRecords(domain, dkim, verification);
       return { domain, dkim, verification };
     }
 
-    // Generate DKIM RSA 2048 keys
-    const { privateKey, publicKey } = generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    });
+    // Generate DKIM RSA keypair (real key, shared with OpenDKIM later)
+    const { privateKey, formattedPublicKey } = this.generateKeyPair();
 
-    // Strip PEM headers/footers/newlines for TXT storage
-    const formattedPublicKey = publicKey
-      .replace(/-----BEGIN PUBLIC KEY-----/, '')
-      .replace(/-----END PUBLIC KEY-----/, '')
-      .replace(/\s+/g, '');
-
-    // Save Domain
+    // Save Domain with auto-populated mail server configuration
     domain = await this.domainRepo.create({
       workspaceId: workspaceId as any,
       name: trimmedName,
       status: 'pending',
+      mailServerHost: env.MAIL_SERVER_HOST,
+      mailServerIp: env.MAIL_SERVER_IP || env.MAIL_SERVER_HOST, // Fallback to hostname if IP not set
+      dmarcPolicy: 'none',
     } as any);
 
-    // Save DKIM Keys
+    // Save DKIM Keys (private key encrypted at rest, public key stripped for DNS)
     const dkim = await this.dkimRepo.create({
       domainId: domain.id,
-      selector: 'ghost',
-      privateKey,
+      selector: env.DEFAULT_DKIM_SELECTOR || 'ghost',
+      privateKey: this.encryptDkimKey(privateKey),
       publicKey: formattedPublicKey,
+      keySize: env.DKIM_KEY_SIZE ?? 2048,
+      isActive: true,
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
     } as any);
 
-    // Generate Expected DNS parameters
-    const spfRecord = 'v=spf1 include:relay.ghostsmtp.com ~all';
-    const dkimRecord = `v=DKIM1; k=rsa; p=${formattedPublicKey}`;
-    const dmarcRecord = `v=DMARC1; p=none; rua=mailto:dmarc-reports@ghostsmtp.com`;
-    const mxRecord = '10 mail.ghostsmtp.com';
-    const cnameRecord = 'tracking.ghostsmtp.com';
+    // Sync the REAL private key into the OpenDKIM container (best-effort).
+    await openDkim.syncDomain(domain.name, dkim.selector, privateKey);
 
-    // Save Verification targets
+    // Generate real DNS records from the actual mail infrastructure.
+    const set = dnsGenerator.generateForDomain(
+      domain.name,
+      formattedPublicKey,
+      this.generationOptions(domain, dkim.selector)
+    );
+
+    // Save Verification targets (expected values the customer must publish)
     const verification = await this.verificationRepo.create({
       domainId: domain.id,
-      spfRecord,
-      dkimRecord,
-      dmarcRecord,
-      mxRecord,
-      cnameRecord,
+      spfRecord: set.raw.spf,
+      dkimRecord: set.raw.dkim,
+      dmarcRecord: set.raw.dmarc,
+      mxRecord: set.raw.mx,
+      cnameRecord: set.raw.trackingCname,
+      trackingCname: set.raw.trackingCname,
+      bounceCname: set.raw.bounceCname,
+      returnPathRecord: set.raw.returnPath,
+      autoconfigCname: set.raw.autoconfigCname,
+      autodiscoverRecord: set.raw.autodiscoverRecord,
+      mailFrom: set.raw.mailFrom,
+      dmarcPolicy: 'none',
       spfVerified: false,
       dkimVerified: false,
       dmarcVerified: false,
@@ -114,6 +221,25 @@ export class DomainService {
     return this.domainRepo.findByWorkspace(workspaceId);
   }
 
+  private buildDnsRecords(domain: any, dkim: any, verification: any) {
+    const p = this.prefixes(domain);
+    const selector = dkim?.selector || domain.dkimSelector || env.DEFAULT_DKIM_SELECTOR || 'ghost';
+
+    return {
+      spf: { type: 'TXT', host: '@', value: verification?.spfRecord },
+      dkim: { type: 'TXT', host: `${selector}._domainkey.${domain.name}`, value: verification?.dkimRecord },
+      dmarc: { type: 'TXT', host: `_dmarc.${domain.name}`, value: verification?.dmarcRecord },
+      mx: { type: 'MX', host: domain.name, value: verification?.mxRecord },
+      cname: { type: 'CNAME', host: `${p.tracking}.${domain.name}`, value: verification?.cnameRecord }, // backward-compatible alias
+      tracking: { type: 'CNAME', host: `${p.tracking}.${domain.name}`, value: verification?.trackingCname },
+      bounce: { type: 'CNAME', host: `${p.bounce}.${domain.name}`, value: verification?.bounceCname },
+      returnPath: { type: 'CNAME', host: `${p.returnPath}.${domain.name}`, value: verification?.returnPathRecord },
+      autoconfig: { type: 'CNAME', host: `${p.autoconfig}.${domain.name}`, value: verification?.autoconfigCname },
+      autodiscover: { type: 'SRV', host: `_autodiscover._tcp.${domain.name}`, value: verification?.autodiscoverRecord },
+      mailFrom: { type: 'TXT', host: `${p.returnPath}.${domain.name}`, value: verification?.mailFrom },
+    };
+  }
+
   async getDomainDetails(workspaceId: string, domainId: string) {
     const domain = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
     if (!domain) {
@@ -122,43 +248,33 @@ export class DomainService {
 
     const dkim = await this.dkimRepo.findByDomainId(domainId);
     const verification = await this.verificationRepo.findByDomainId(domainId);
+    await this.ensureProductionRecords(domain, dkim, verification);
 
     return {
       domain,
-
-      dnsRecords: {
-        dkim: {
-          host: `${dkim?.selector}._domainkey.${domain.name}`,
-          value: verification?.dkimRecord,
-        },
-
-        spf: {
-          host: "@",
-          value: verification?.spfRecord,
-        },
-
-        dmarc: {
-          host: `_dmarc.${domain.name}`,
-          value: verification?.dmarcRecord,
-        },
-
-        mx: {
-          host: domain.name,
-          value: verification?.mxRecord,
-        },
-
-        cname: {
-          host: `tracking.${domain.name}`,
-          value: verification?.cnameRecord,
-        },
-      },
-
+      dnsRecords: this.buildDnsRecords(domain, dkim, verification),
       verification,
     };
   }
 
+  private buildVerificationChecks(domain: any, dkim: any, verification: any): DnsCheckInput[] {
+    const p = this.prefixes(domain);
+    const selector = dkim?.selector || domain.dkimSelector || env.DEFAULT_DKIM_SELECTOR || 'ghost';
+
+    return [
+      { record: 'spf', label: 'SPF', type: 'TXT', host: domain.name, expected: verification.spfRecord },
+      { record: 'dkim', label: 'DKIM', type: 'TXT', host: `${selector}._domainkey.${domain.name}`, expected: verification.dkimRecord },
+      { record: 'dmarc', label: 'DMARC', type: 'TXT', host: `_dmarc.${domain.name}`, expected: verification.dmarcRecord },
+      { record: 'mx', label: 'MX', type: 'MX', host: domain.name, expected: verification.mxRecord },
+      { record: 'tracking', label: 'Tracking CNAME', type: 'CNAME', host: `${p.tracking}.${domain.name}`, expected: verification.trackingCname },
+      { record: 'bounce', label: 'Bounce CNAME', type: 'CNAME', host: `${p.bounce}.${domain.name}`, expected: verification.bounceCname },
+      { record: 'returnPath', label: 'Return-Path CNAME', type: 'CNAME', host: `${p.returnPath}.${domain.name}`, expected: verification.returnPathRecord },
+      { record: 'autoconfig', label: 'Autoconfig CNAME', type: 'CNAME', host: `${p.autoconfig}.${domain.name}`, expected: verification.autoconfigCname },
+      { record: 'autodiscover', label: 'Autodiscover SRV', type: 'SRV', host: `_autodiscover._tcp.${domain.name}`, expected: verification.autodiscoverRecord },
+    ];
+  }
+
   async verifyDomain(workspaceId: string, domainId: string) {
-    console.log(dns.getServers());
     const domain = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
     if (!domain) {
       throw new Error('Domain not found.');
@@ -171,99 +287,55 @@ export class DomainService {
       throw new Error('Domain configurations missing.');
     }
 
-    // SPF Verification
-    let spfVerified = false;
-    try {
-      const txtRecords = await dnsPromises.resolveTxt(domain.name);
-      console.log("TXT Records:", txtRecords);
-      spfVerified = txtRecords.some(record => 
-        record.join('').includes('v=spf1') && record.join('').includes('relay.ghostsmtp.com')
-      );
-      console.log("SPF TXT:", txtRecords);
-      console.log("Expected SPF:", verification.spfRecord);
-      console.log("SPF Verified:", spfVerified);
-    } catch (e) {
-      console.error("SPF ERROR:", e);
-    }
+    await this.ensureProductionRecords(domain, dkim, verification);
 
-    // DKIM Verification
-    let dkimVerified = false;
-    try {
-      const dkimDomain = `${dkim.selector}._domainkey.${domain.name}`;
-      const txtRecords = await dnsPromises.resolveTxt(dkimDomain);
-      console.log("DKIM TXT:", txtRecords);
-      dkimVerified = txtRecords.some(record => 
-        record.join('').includes('v=DKIM1') && record.join('').includes(dkim.publicKey)
-      );
-      console.log("DKIM TXT:", txtRecords);
-      console.log("Expected Public Key:", dkim.publicKey);
-      console.log("DKIM Verified:", dkimVerified);
-    } catch (e) {
-      console.error("DKIM ERROR:", e);
-    }
+    // Run all live DNS checks concurrently.
+    const checks = this.buildVerificationChecks(domain, dkim, verification);
+    const results = await dnsLookup.verifyAll(checks);
 
-    // DMARC Verification
-    let dmarcVerified = false;
-    try {
-      const dmarcDomain = `_dmarc.${domain.name}`;
-      const txtRecords = await dnsPromises.resolveTxt(dmarcDomain);
-      console.log("DMARC TXT:", txtRecords);
-      dmarcVerified = txtRecords.some(record => 
-        record.join('').includes('v=DMARC1')
-      );
-      console.log("DMARC TXT:", txtRecords);
-      console.log("Expected DMARC:", verification.dmarcRecord);
-      console.log("DMARC Verified:", dmarcVerified);
-    } catch (e) {
-      console.error("DMARC ERROR:", e);
-    }
+    const byRecord = new Map(results.map((r) => [r.record, r]));
 
-    // MX Verification
-    let mxVerified = false;
-    try {
-      const mxRecords = await dnsPromises.resolveMx(domain.name);
-      console.log("MX Records:", mxRecords);
-      mxVerified = mxRecords.some(record => 
-        record.exchange.includes('mail.ghostsmtp.com')
-      );
-      console.log("MX Records:", mxRecords);
-      console.log("Expected MX:", verification.mxRecord);
-      console.log("MX Verified:", mxVerified);
-    } catch (e) {
-      console.error("MX ERROR:", e);
-    }
-
-    // Update flags
-    verification.spfVerified = spfVerified;
-    verification.dkimVerified = dkimVerified;
-    verification.dmarcVerified = dmarcVerified;
-    verification.mxVerified = mxVerified;
+    // Update per-record verified flags (including backward-compatible aliases).
+    verification.spfVerified = !!byRecord.get('spf')?.verified;
+    verification.dkimVerified = !!byRecord.get('dkim')?.verified;
+    verification.dmarcVerified = !!byRecord.get('dmarc')?.verified;
+    verification.mxVerified = !!byRecord.get('mx')?.verified;
+    verification.cnameVerified = !!byRecord.get('tracking')?.verified;
+    verification.trackingVerified = !!byRecord.get('tracking')?.verified;
+    verification.bounceVerified = !!byRecord.get('bounce')?.verified;
+    verification.returnPathVerified = !!byRecord.get('returnPath')?.verified;
+    verification.autoconfigVerified = !!byRecord.get('autoconfig')?.verified;
+    verification.autodiscoverVerified = !!byRecord.get('autodiscover')?.verified;
     verification.lastVerifiedAt = new Date();
-    console.log("SPF:", spfVerified);
-    console.log("DKIM:", dkimVerified);
-    console.log("DMARC:", dmarcVerified);
-    console.log("MX:", mxVerified);
+
+    // Store detailed per-check output + human-readable errors.
+    verification.verificationResults = results.map((r) => ({
+      record: r.record,
+      label: r.label,
+      type: r.type,
+      host: r.host,
+      expected: r.expected,
+      actual: r.actual,
+      allActual: r.allActual,
+      verified: r.verified,
+      error: r.error,
+    }));
+    verification.verificationErrors = results
+      .filter((r) => !r.verified)
+      .map((r) => `${r.label} (${r.host}): ${r.error || 'record not found'}`);
     await verification.save();
 
-    // Check overall verification status
-    // Domain is verified if SPF, DKIM, and DMARC parameters are satisfied
-    const totalChecks = [
-      spfVerified,
-      dkimVerified,
-      dmarcVerified,
-      mxVerified,
-    ];
-
-    const verifiedCount = totalChecks.filter(Boolean).length;
+    // Determine overall status from the sending-critical checks.
+    const totalChecks = REQUIRED_CHECKS;
+    const verifiedCount = totalChecks.filter((key) => !!byRecord.get(key)?.verified).length;
 
     const oldStatus = domain.status;
-
     if (verifiedCount === totalChecks.length) {
-      domain.status = "verified";
+      domain.status = 'verified';
     } else if (verifiedCount === 0) {
-      domain.status = "pending";
+      domain.status = 'pending';
     } else {
-      domain.status = "failed";
+      domain.status = 'failed';
     }
 
     await domain.save();
@@ -277,6 +349,60 @@ export class DomainService {
       status: domain.status,
       domain,
       verification,
+      results,
     };
+  }
+
+  /**
+   * Rotate the DKIM keypair for a domain. Generates a fresh key, syncs it to
+   * OpenDKIM, and regenerates the DKIM DNS record so the customer can publish
+   * the new public key. Non-breaking addition.
+   */
+  async regenerateDkim(workspaceId: string, domainId: string) {
+    const domain = await this.domainRepo.findByWorkspaceAndId(workspaceId, domainId);
+    if (!domain) {
+      throw new Error('Domain not found.');
+    }
+
+    let dkim = await this.dkimRepo.findByDomainId(domainId);
+    const verification = await this.verificationRepo.findByDomainId(domainId);
+    if (!verification) {
+      throw new Error('Domain configurations missing.');
+    }
+
+    const { privateKey, formattedPublicKey } = this.generateKeyPair();
+    const selector = dkim?.selector || env.DEFAULT_DKIM_SELECTOR || 'ghost';
+
+    if (dkim) {
+      dkim.privateKey = this.encryptDkimKey(privateKey);
+      dkim.publicKey = formattedPublicKey;
+      dkim.keySize = env.DKIM_KEY_SIZE ?? 2048;
+      dkim.generatedAt = new Date();
+      dkim.expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+      await dkim.save();
+    } else {
+      dkim = await this.dkimRepo.create({
+        domainId: domain.id,
+        selector,
+        privateKey: this.encryptDkimKey(privateKey),
+        publicKey: formattedPublicKey,
+        keySize: env.DKIM_KEY_SIZE ?? 2048,
+        isActive: true,
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      } as any);
+    }
+
+    // Sync the new key + refresh DKIM record.
+    await openDkim.syncDomain(domain.name, selector, privateKey);
+    const set = dnsGenerator.generateForDomain(
+      domain.name,
+      formattedPublicKey,
+      this.generationOptions(domain, selector)
+    );
+    verification.dkimRecord = set.raw.dkim;
+    verification.dkimVerified = false;
+    await verification.save();
+
+    return { domain, dkim, verification };
   }
 }
